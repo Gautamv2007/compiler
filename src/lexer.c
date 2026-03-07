@@ -91,7 +91,7 @@ token_T* lexer_next_token(lexer_T* lexer)
       return lexer_parse_id(lexer);
 
     if (isdigit(lexer->c))
-      return lexer_advance_with(lexer, lexer_parse_number(lexer));
+      return lexer_parse_number(lexer);
 
     switch(lexer->c)
     {

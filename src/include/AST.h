@@ -13,12 +13,14 @@ typedef struct AST_STRUCT
     AST_DEFINITION_TYPE,
     AST_VARIABLE,
     AST_STATEMENT,
+    AST_INT,
     AST_NOOP,
   } type;
   
   list_T* children; 
   char* name;
   struct AST_STRUCT* value;
+  int int_value;
   int data_type;
 } AST_T;
 

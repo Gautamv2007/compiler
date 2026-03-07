@@ -72,7 +72,7 @@ AST_T* parser_parse_id(parser_T* parser)
     if (parser->token->type == TOKEN_LPAREN)
     {
       ast->type = AST_CALL;
-      ast->children = parser_parse_list(parser);
+      ast->value = parser_parse_list(parser);
     }
   }
 
@@ -133,8 +133,19 @@ AST_T* parser_parse_list(parser_T* parser)
   {
     parser_eat(parser, TOKEN_ARROW_RIGHT);
     ast->type = AST_FUNCTION;
-    ast->value = parser_parse_block(parser);
+    ast->value = parser_parse_compound(parser);
   }
+
+  return ast;
+}
+
+AST_T* parser_parse_int(parser_T* parser)
+{
+  int int_value = atoi(parser->token->value);
+  parser_eat(parser, TOKEN_INT);
+
+  AST_T* ast = init_ast(AST_INT);
+  ast->int_value = int_value;
 
   return ast;
 }
@@ -145,18 +156,33 @@ AST_T* parser_parse_expr(parser_T* parser)
   {
     case TOKEN_ID:  return parser_parse_id(parser);
     case TOKEN_LPAREN: return parser_parse_list(parser);
-    case TOKEN_INT: return parser_parse_list(parser);
+    case TOKEN_INT: return parser_parse_int(parser);
     default: { printf("[Parser]: Unexpected token `%s`\n", token_to_str(parser->token)); exit(1); }
   }
 }
 
 AST_T* parser_parse_compound(parser_T* parser)
 {
-  AST_T* compound = init_ast(AST_COMPOUND); 
-  while(parser->token->type != TOKEN_EOF)
+  unsigned int should_close = 0;
+
+  if (parser->token->type == TOKEN_LBRACE)
+  {
+    parser_eat(parser, TOKEN_LBRACE);
+    should_close = 1;
+  }
+
+  AST_T* compound = init_ast(AST_COMPOUND);
+
+  while(parser->token->type != TOKEN_EOF && parser->token->type != TOKEN_RBRACE)
   {
     list_push(compound->children, parser_parse_expr(parser));
+
+    if(parser->token->type == TOKEN_SEMI)
+      parser_eat(parser, TOKEN_SEMI);
   }
+
+  if (should_close)
+    parser_eat(parser, TOKEN_RBRACE);
 
   return compound;
 }
