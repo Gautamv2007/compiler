@@ -86,9 +86,9 @@ token_T* lexer_next_token(lexer_T* lexer)
   while(lexer->c != '\0')
   {
     lexer_skip_whitespace(lexer);
-     
-    if (isalnum(lexer->c))
-      return lexer_advance_with(lexer, lexer_parse_id(lexer));
+   
+    if (isalpha(lexer->c))
+      return lexer_parse_id(lexer);
 
     if (isdigit(lexer->c))
       return lexer_advance_with(lexer, lexer_parse_number(lexer));
@@ -96,7 +96,7 @@ token_T* lexer_next_token(lexer_T* lexer)
     switch(lexer->c)
     {
       case '=': {
-        if (lexer_peek(lexer, 1) == '>') return lexer_advance_with(lexer, init_token("=>", TOKEN_ARROW_RIGHT));
+        if (lexer_peek(lexer, 1) == '>') return lexer_advance_with(lexer, lexer_advance_with(lexer, init_token("=>", TOKEN_ARROW_RIGHT)));
         return lexer_advance_with(lexer, init_token("=", TOKEN_EQUALS));
       } break;
 

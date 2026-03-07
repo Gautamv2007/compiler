@@ -7,17 +7,17 @@
 void tac_compile(char* src)
 {
   lexer_T* lexer = init_lexer(src);
-
   parser_T* parser = init_parser(lexer);
   AST_T* root = parser_parse(parser);
-  printf("%p\n", root);
-  /*token_T* tok = 0;
+
+  printf("%ld\n", root->children->size);
+
+  token_T* tok = 0;
 
   while((tok = lexer_next_token(lexer))->type != TOKEN_EOF)
   {
     printf("%s\n", token_to_str(tok));
-  }
-  */ 
+  } 
 }
 
 void tac_compile_file(const char* filename)
