@@ -11,7 +11,7 @@ void tac_compile(char* src)
   parser_T* parser = init_parser(lexer);
   AST_T* root = parser_parse(parser);
 
-  char* s = as_f(root);
+  char* s = as_f_root(root);
   printf("%s\n", s);
 }
 
