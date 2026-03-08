@@ -43,8 +43,9 @@ void tac_compile(char* src)
   char* s = as_f_root(root);
 
   tac_write_file("a.s", s);
-  sh("as a.s -o a.o");
-  sh("ld a.o -o a.out");
+  tac_write_file("a.s.txt", s); // To generate the assembly in the file a.s.txt for our reference
+  sh("as --32 a.s -o a.o"); // This --32 is required because we are using the 32 bit assembler
+  sh("ld a.o -o a.out -m elf_i386"); //This "-m elf_i386"is also required for 32 bit assembler
 }
 
 void tac_compile_file(const char* filename)

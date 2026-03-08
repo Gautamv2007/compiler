@@ -1,3 +1,4 @@
 main = (argc: int, argv: Array<string>):int => {
-  return(16);
+  argv[1];
+  return(argc);
 }
