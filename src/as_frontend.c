@@ -120,7 +120,14 @@ char* as_f_call(AST_T* ast, list_T* list)
   return s;
 }
 
-char* as_f_int(AST_T* ast, list_T* list) {}
+char* as_f_int(AST_T* ast, list_T* list)
+{
+  const char* template = "$%d";
+  char* s = calloc(strlen(template) + 128, sizeof(char));
+  sprintf(s, template, ast->int_value);
+
+  return s;
+}
 
 char* as_f_root(AST_T* ast, list_T* list)
 {

@@ -3,6 +3,7 @@
 #include "include/parser.h"
 #include "include/io.h"
 #include "include/as_frontend.h"
+#include "include/visitor.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -40,8 +41,11 @@ void tac_compile(char* src)
   parser_T* parser = init_parser(lexer);
   AST_T* root = parser_parse(parser);
 
-  char* s = as_f_root(root, init_list(sizeof(struct AST_STRUCT*)));
+  visitor_T* visitor = init_visitor();
+  AST_T* optimized_root = visitor_visit(visitor, root, init_list(sizeof(struct AST_STRUCT*)));
 
+  char* s = as_f_root(optimized_root, init_list(sizeof(struct AST_STRUCT*)));
+  
   tac_write_file("a.s", s);
   tac_write_file("a.s.txt", s); // To generate the assembly in the file a.s.txt for our reference
   sh("as --32 a.s -o a.o"); // This --32 is required because we are using the 32 bit assembler
