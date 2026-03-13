@@ -1,4 +1,0 @@
-main = (argc: int, argv: Array<string>):int => {
-  print(1);
-  return(0);
-}

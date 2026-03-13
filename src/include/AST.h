@@ -18,15 +18,25 @@ typedef struct AST_STRUCT
     AST_STATEMENT,
     AST_ACCESS,
     AST_INT,
+    AST_BINOP,      // New: For +, -, *, /
+    AST_IF,         // New: For conditionals
+    AST_WHILE,      // New: For loops
     AST_NOOP,
   } type;
   
   list_T* children; 
   char* name;
   char* string_value;
-  struct AST_STRUCT* value;
+  char* op;         // New: To store the operator (e.g., "+", "<")
+  
+  struct AST_STRUCT* left;  // New: For Binary Ops (left side)
+  struct AST_STRUCT* right; // New: For Binary Ops (right side)
+  struct AST_STRUCT* value; // For assignments/returns
+  
   int int_value;
   int data_type;
+
+  // Function pointer for the visitor to execute logic specific to this node
   struct AST_STRUCT* (*fptr)(struct VISITOR_STRUCT* visitor, struct AST_STRUCT* node, list_T* list);
 } AST_T;
 

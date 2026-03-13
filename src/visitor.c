@@ -1,5 +1,6 @@
 #include "include/visitor.h"
 #include "include/builtins.h"
+#include "include/AST.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -36,20 +37,43 @@ visitor_T* init_visitor()
 
 AST_T* visitor_visit(visitor_T* visitor, AST_T* node, list_T* list)
 {
+  if (!node) return NULL;
+
   switch (node->type)
   {
-    case AST_COMPOUND: return visitor_visit_compound(visitor, node, list); break;
-    case AST_ASSIGNMENT:  return visitor_visit_assignment(visitor, node, list); break;
-    case AST_VARIABLE: return visitor_visit_variable(visitor, node, list);  break;
-    case AST_CALL:  return visitor_visit_call(visitor, node, list); break;
-    case AST_INT:  return visitor_visit_int(visitor, node, list); break;
-    case AST_ACCESS:  return visitor_visit_access(visitor, node, list); break;
-    case AST_FUNCTION:  return visitor_visit_function(visitor, node, list); break;
-    default: { printf("[Visitor]: Don't know how to handle AST of type `%d`\n", node->type); exit(1); } break;
+    case AST_COMPOUND:   return visitor_visit_compound(visitor, node, list);
+    case AST_ASSIGNMENT: return visitor_visit_assignment(visitor, node, list);
+    case AST_VARIABLE:   return visitor_visit_variable(visitor, node, list);
+    case AST_CALL:       return visitor_visit_call(visitor, node, list);
+    case AST_INT:        return visitor_visit_int(visitor, node, list);
+    case AST_ACCESS:     return visitor_visit_access(visitor, node, list);
+    case AST_FUNCTION:   return visitor_visit_function(visitor, node, list);
+    
+    // --- New Visitors ---
+    case AST_BINOP:      return visitor_visit_binop(visitor, node, list);
+    case AST_WHILE:      return visitor_visit_while(visitor, node, list);
+    
+    default: { printf("[Visitor]: Don't know how to handle AST of type `%d`\n", node->type); exit(1); }
   }
+}
 
-  return node;
+AST_T* visitor_visit_binop(visitor_T* visitor, AST_T* node, list_T* list)
+{
+  AST_T* binop = init_ast(AST_BINOP);
+  binop->op = node->op;
+  binop->left = visitor_visit(visitor, node->left, list);
+  binop->right = visitor_visit(visitor, node->right, list);
+  return binop;
+}
 
+AST_T* visitor_visit_while(visitor_T* visitor, AST_T* node, list_T* list)
+{
+  AST_T* while_node = init_ast(AST_WHILE);
+  // Condition
+  while_node->value = visitor_visit(visitor, node->value, list);
+  // Body (usually stored in left for your structure)
+  while_node->left = visitor_visit(visitor, node->left, list);
+  return while_node;
 }
 
 AST_T* visitor_visit_compound(visitor_T* visitor, AST_T* node, list_T* list)
@@ -84,20 +108,20 @@ AST_T* visitor_visit_variable(visitor_T* visitor, AST_T* node, list_T* list)
 
   return node;
 }
+
 AST_T* visitor_visit_function(visitor_T* visitor, AST_T* node, list_T* list)
 {
   AST_T* func = init_ast(AST_FUNCTION);
-  func->children = init_list(sizeof(struct AST_STRUCT*));
-  func->value = init_ast(AST_COMPOUND);
-
-  for(unsigned int i = 0;i<node->children->size;i++){
-    list_push(func->children, visitor_visit(visitor, (AST_T*) node->value->children->items[i], list));
+  
+  // DEEP COPY: Instead of overwriting func->children, we push into it!
+  for (size_t i = 0; i < node->children->size; i++) 
+  {
+      AST_T* old_arg = (AST_T*) node->children->items[i];
+      AST_T* new_arg = visitor_visit(visitor, old_arg, list);
+      list_push(func->children, new_arg); 
   }
-
-  for(unsigned int i = 0;i<node->value->children->size;i++){
-    list_push(func->value->children, visitor_visit(visitor, (AST_T*) node->value->children->items[i], list));
-  }
-
+  
+  func->value = visitor_visit(visitor, node->value, list);
   return func;
 }
 

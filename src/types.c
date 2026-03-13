@@ -3,11 +3,9 @@
 
 int typename_to_int(const char* name)
 {
-  int t = 0;
-  size_t len = strlen(name);
-
-  for(unsigned int i = 0; i < len;i++)
-    t += name[i];
-
-  return t;
+    if (strcmp(name, "int") == 0) return 1;
+    if (strcmp(name, "string") == 0) return 2;
+    if (strcmp(name, "void") == 0) return 3;
+    
+    return 0; // Unknown type
 }
