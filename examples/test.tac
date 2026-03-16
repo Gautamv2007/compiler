@@ -1,7 +1,7 @@
 main = () -> {
-    x = 50 * 1000;
-    y = 10 + 10;
-    print(x);
-    print(y);
-    return 0;
+  a = 10;
+  b = 10 * 2 + 5;
+  print(a);
+  print(b);
+  return(0);
 };
