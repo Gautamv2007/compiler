@@ -70,6 +70,7 @@ token_T* lexer_parse_id(lexer_T* lexer)
   
   // NEW: Add the int data type keyword
   if (strcmp(value, "int") == 0) return init_token(value, TOKEN_KW_INT); 
+  if (strcmp(value, "str") == 0) return init_token(value, TOKEN_KW_STR);
 
   return init_token(value, TOKEN_ID);  
 }
@@ -133,8 +134,38 @@ token_T* lexer_next_token(lexer_T* lexer)
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
       case ';': return lexer_advance_current(lexer, TOKEN_SEMI);
+      case '"': return lexer_collect_string(lexer);
       default: printf("[Lexer]: Unexpected character `%c`\n", lexer->c); exit(1);
     }
   }
   return init_token(0, TOKEN_EOF);
+}
+
+char* lexer_get_char_as_str(lexer_T* lexer) {
+    char* s = calloc(2, sizeof(char));
+    s[0] = lexer->c;
+    s[1] = '\0';
+    return s;
+}
+
+token_T* lexer_collect_string(lexer_T* lexer) {
+    lexer_advance(lexer); // Skip the opening "
+
+    char* value = calloc(1, sizeof(char));
+    value[0] = '\0';
+
+    while (lexer->c != '"' && lexer->c != '\0') {
+        // Fix 1: Using 'lexer_get_char_as_str' as suggested by the compiler
+        char* s = lexer_get_char_as_str(lexer); 
+        value = realloc(value, (strlen(value) + strlen(s) + 1) * sizeof(char));
+        strcat(value, s);
+        free(s);
+        lexer_advance(lexer);
+    }
+
+    lexer_advance(lexer); // Skip the closing "
+
+    // Fix 2: Swap the arguments! 
+    // Your init_token wants (char* value, int type)
+    return init_token(value, TOKEN_STRING); 
 }

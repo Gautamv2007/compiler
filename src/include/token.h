@@ -19,7 +19,9 @@ typedef struct TOKEN_STRUCT
     TOKEN_GT,
     TOKEN_ARROW_RIGHT,
     TOKEN_INT,
+    TOKEN_STRING,
     TOKEN_KW_INT,
+    TOKEN_KW_STR,
     TOKEN_SEMI,
     // New Tokens for Arithmetic and Loops
     TOKEN_PLUS,

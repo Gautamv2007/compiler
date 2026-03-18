@@ -53,6 +53,8 @@ AST_T* visitor_visit(visitor_T* visitor, AST_T* node, list_T* list)
     case AST_BINOP:      return visitor_visit_binop(visitor, node, list);
     case AST_WHILE:      return visitor_visit_while(visitor, node, list);
     case AST_IF:         return visitor_visit_if(visitor, node, list);
+
+    case AST_STRING:     return visitor_visit_string(visitor, node, list);
     
     default: { printf("[Visitor]: Don't know how to handle AST of type `%d`\n", node->type); exit(1); }
   }
@@ -168,5 +170,13 @@ AST_T* visitor_visit_if(visitor_T* visitor, AST_T* node, list_T* list)
   }
   
   return if_node;
+}
+
+
+AST_T* visitor_visit_string(visitor_T* visitor, AST_T* node, list_T* list)
+{
+    // Strings are "leaf nodes" in your AST, so we just return the node as-is 
+    // so the backend can see it.
+    return node;
 }
 

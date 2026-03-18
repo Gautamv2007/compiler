@@ -7,6 +7,9 @@
 static int label_count = 0;
 static int current_local_offset = -4;
 
+static int string_count = 0;
+char* string_data_section = NULL;
+
 static AST_T* var_lookup(list_T* list, const char* name)
 {
   for(int i = 0; i < (int) list->size;i++)
@@ -24,6 +27,34 @@ static AST_T* var_lookup(list_T* list, const char* name)
 
   return 0;
 }
+
+//For string function 
+char* as_f_string(AST_T* ast, list_T* list) {
+    int label = string_count++;
+    
+    // 1. Add string to the global data section (e.g., .L_STR_0: .asciz "Hello World")
+    // .asciz automatically adds a null-terminator (\0) to the end of the string!
+    const char* data_template = ".L_STR_%d:\n    .asciz \"%s\"\n";
+    
+    char* new_data = calloc(strlen(data_template) + strlen(ast->string_value) + 32, sizeof(char));
+    sprintf(new_data, data_template, label, ast->string_value);
+    
+    if (!string_data_section) {
+        string_data_section = calloc(1, sizeof(char));
+    }
+    string_data_section = realloc(string_data_section, strlen(string_data_section) + strlen(new_data) + 1);
+    strcat(string_data_section, new_data);
+    free(new_data);
+
+    // 2. Return the assembly to load the string's memory pointer into EAX
+    // Notice the '$' before the label. We want the memory ADDRESS, not the value at the address.
+    const char* text_template = "movl $.L_STR_%d, %%eax\n";
+    char* s = calloc(strlen(text_template) + 32, sizeof(char));
+    sprintf(s, text_template, label);
+
+    return s;
+}
+
 
 char* as_f_compound(AST_T* ast, list_T* list)
 {
@@ -190,7 +221,14 @@ char* as_f_assignment(AST_T* ast, list_T* list)
       AST_T* farg = (AST_T*) as_val->children->items[i];
       AST_T* arg_variable = init_ast(AST_VARIABLE);
       arg_variable->name = farg->name;
-      arg_variable->int_value = (4 * as_val->children->size) - (i * 4);
+
+      // --- THE FIX IS HERE ---
+      // In x86, the first argument (index 0) is always at 8(%ebp)
+      // The second (index 1) is at 12(%ebp), etc.
+      arg_variable->int_value = 8 + (i * 4); 
+      // -----------------------
+
+
       list_push(list, arg_variable);
     }
 
@@ -282,6 +320,26 @@ char* as_f_int(AST_T* ast, list_T* list)
 }
 
 const char* asm_builtins = 
+// --- NEW: Print String ---
+"builtin_print_str:\n"
+"    pushl %ebp\n"
+"    movl %esp, %ebp\n"
+"    movl 8(%ebp), %ecx\n"      // Load string pointer into ECX
+"    movl %ecx, %edi\n"         // Copy pointer to EDI for length calculation
+".L_strlen_loop:\n"
+"    cmpb $0, (%edi)\n"         // Look for the null terminator (\0)
+"    je .L_strlen_done\n"
+"    incl %edi\n"               // Move to next character
+"    jmp .L_strlen_loop\n"
+".L_strlen_done:\n"
+"    subl %ecx, %edi\n"         // EDI now holds the exact length of the string
+"    movl $4, %eax\n"           // sys_write
+"    movl $1, %ebx\n"           // stdout
+"    movl %edi, %edx\n"         // Length
+"    int $0x80\n"
+"    popl %ebp\n"
+"    ret\n"
+// --- NEW: Print Integer ---
 "builtin_print_int:\n"
 "    pushl %ebp\n"
 "    movl %esp, %ebp\n"
@@ -313,72 +371,126 @@ const char* asm_builtins =
 char* as_f_call(AST_T* ast, list_T* list)
 {
   char* s = calloc(1, sizeof(char));
-  AST_T* first_arg = NULL;
-  
-  if (ast->value != NULL && ast->value->children != NULL && ast->value->children->size > 0) {
-      first_arg = (AST_T*) ast->value->children->items[0];
-  } else if (ast->children != NULL && ast->children->size > 0) {
-      first_arg = (AST_T*) ast->children->items[0];
-  } else if (ast->value != NULL) {
-      first_arg = ast->value; 
+
+  // Determine where the arguments live (handles varying AST structures)
+  list_T* args = NULL;
+  if (ast->value && ast->value->children) {
+      args = ast->value->children;
+  } else if (ast->children) {
+      args = ast->children;
   }
 
-  if (first_arg == NULL) {
-      printf("[Backend Error]: '%s' expects an argument but got NULL!\n", ast->name);
-      exit(1);
-  }
-
-  char* val_s = as_f(first_arg, list);
-
+  // Handle return
   if (strcmp(ast->name, "return") == 0)
   {
+    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
+    char* val_s = as_f(first_arg, list);
     const char* template = "%s"
                            "movl %%ebp, %%esp\n"
                            "popl %%ebp\n"
                            "ret\n";
     s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
     sprintf(s, template, val_s);
+    free(val_s);
   }
+  // Handle print
   else if (strcmp(ast->name, "print") == 0)
   {
-    // val_s evaluates the argument into EAX, so we just push it!
+    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
+    char* val_s = as_f(first_arg, list);
     const char* template = "%s" 
                            "pushl %%eax\n"    
                            "call builtin_print_int\n"
                            "addl $4, %%esp\n"; 
+    s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
+    sprintf(s, template, val_s);
+    free(val_s);
+  }
+
+  else if (strcmp(ast->name, "print_str") == 0)
+  {
+    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
+    char* val_s = as_f(first_arg, list);
+    const char* template = "%s" 
+                           "pushl %%eax\n"    
+                           "call builtin_print_str\n"
+                           "addl $4, %%esp\n"; 
     
     s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
     sprintf(s, template, val_s);
+    free(val_s);
+  }
+  // --- NEW: Handle Custom Functions ---
+  else 
+  {
+    // 1. Evaluate and PUSH arguments in reverse order
+    if (args) {
+        for (int i = args->size - 1; i >= 0; i--) {
+            AST_T* arg = (AST_T*) args->items[i];
+            char* arg_s = as_f(arg, list);
+            
+            const char* push_template = "%s"
+                                        "pushl %%eax\n";
+            s = realloc(s, strlen(s) + strlen(arg_s) + strlen(push_template) + 1);
+            
+            char* temp = calloc(strlen(arg_s) + strlen(push_template) + 1, sizeof(char));
+            sprintf(temp, push_template, arg_s);
+            strcat(s, temp);
+            
+            free(temp);
+            free(arg_s);
+        }
+    }
+
+    // 2. Call the function and clean up the stack
+    const char* call_template = "call %s\n"
+                                "addl $%d, %%esp\n"; // Stack cleanup!
+                                
+    int cleanup_size = args ? (args->size * 4) : 0;
+    
+    s = realloc(s, strlen(s) + strlen(ast->name) + strlen(call_template) + 32);
+    char* temp2 = calloc(strlen(ast->name) + strlen(call_template) + 32, sizeof(char));
+    sprintf(temp2, call_template, ast->name, cleanup_size);
+    strcat(s, temp2);
+    
+    free(temp2);
   }
   
-  free(val_s); 
   return s;
 }
 
 char* as_f_root(AST_T* ast, list_T* list)
 {
-  // Fix: Because strcpy is used below, these MUST be a single % 
-  const char* section_text = ".section .text\n"
-                            ".globl _start\n"
-                            "_start:\n"
-                            "pushl 0(%esp)\n" // Push argc
-                            "pushl 4(%esp)\n" // Push argv
-                            "call main\n"
-                            "addl $4, %esp\n"
-                            "movl %eax, %ebx\n" // Put exit code in EBX
-                            "movl $1, %eax\n"    // sys_exit
-                            "int $0x80\n\n";
-
+  string_data_section = calloc(1, sizeof(char)); // Initialize empty
+  
   char* user_code = as_f(ast, list);
   
-  size_t total_size = strlen(section_text) + strlen(user_code) + strlen(asm_builtins) + 1;
+  const char* section_data_header = ".section .data\n";
+  const char* section_text_header = ".section .text\n"
+                                    ".globl _start\n"
+                                    "_start:\n"
+                                    "pushl 0(%esp)\n"
+                                    "pushl 4(%esp)\n"
+                                    "call main\n"
+                                    "addl $4, %esp\n"
+                                    "movl %eax, %ebx\n"
+                                    "movl $1, %eax\n"
+                                    "int $0x80\n\n";
+
+  size_t total_size = strlen(section_data_header) + strlen(string_data_section) + 
+                      strlen(section_text_header) + strlen(user_code) + strlen(asm_builtins) + 1;
+                      
   char* value = (char*) calloc(total_size, sizeof(char));
   
-  strcpy(value, section_text);
+  // Build the file top to bottom:
+  strcpy(value, section_data_header);
+  strcat(value, string_data_section);
+  strcat(value, section_text_header);
   strcat(value, user_code);
   strcat(value, asm_builtins);
 
   free(user_code);
+  free(string_data_section); // Clean up!
   return value;
 }
 
@@ -411,6 +523,9 @@ char* as_f(AST_T* ast, list_T* list) {
     case AST_BINOP:      return as_f_binop(ast, list);
     case AST_WHILE:      return as_f_while(ast, list);
     case AST_IF:         return as_f_if(ast, list);
+
+    case AST_STRING:     return as_f_string(ast, list); 
     default: { printf("[As frontend]: No implementation for type `%d`\n", ast->type); exit(1); }
   }
 }
+

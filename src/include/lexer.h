@@ -26,4 +26,8 @@ token_T* lexer_parse_int(lexer_T* lexer);
 
 char* lexer_get_char_as_str(lexer_T* lexer);
 
+char* lexer_get_char_as_str(lexer_T* lexer);
+
+token_T* lexer_collect_string(lexer_T* lexer);
+
 #endif

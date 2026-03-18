@@ -59,6 +59,13 @@ AST_T* parser_parse_factor(parser_T* parser) {
             
             return list_node;
         }
+        case TOKEN_STRING: {
+            AST_T* ast = init_ast(AST_STRING);
+            ast->string_value = calloc(strlen(parser->token->value) + 1, sizeof(char));
+            strcpy(ast->string_value, parser->token->value);
+            parser_eat(parser, TOKEN_STRING);
+            return ast;
+        }
         default: 
             printf("[Parser]: Unexpected token in factor `%s`\n", token_to_str(parser->token)); 
             exit(1);
@@ -197,7 +204,12 @@ AST_T* parser_parse_id(parser_T* parser)
       if (parser->token->type == TOKEN_KW_INT) {
           parsed_data_type = 1; // 1 = Integer (You can use a macro here if you prefer)
           parser_eat(parser, TOKEN_KW_INT);
-      } else {
+      }
+      else if (parser->token->type == TOKEN_KW_STR) { // <--- NEW BLOCK
+          parsed_data_type = 2; // 2 = String (Use a new ID for strings)
+          parser_eat(parser, TOKEN_KW_STR);
+      }
+      else {
           printf("[Parser Error]: Expected a valid data type like 'int' after ':', but got '%s'\n", parser->token->value);
           exit(1);
       }
