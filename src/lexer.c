@@ -62,11 +62,14 @@ token_T* lexer_parse_id(lexer_T* lexer)
     lexer_advance(lexer);
   }
 
-  // Keyword check
+  // Keyword checks
   if (strcmp(value, "while") == 0) return init_token(value, TOKEN_WHILE);
   if (strcmp(value, "if") == 0) return init_token(value, TOKEN_IF);
   if (strcmp(value, "else") == 0) return init_token(value, TOKEN_ELSE);
   if (strcmp(value, "return") == 0) return init_token(value, TOKEN_RETURN);
+  
+  // NEW: Add the int data type keyword
+  if (strcmp(value, "int") == 0) return init_token(value, TOKEN_KW_INT); 
 
   return init_token(value, TOKEN_ID);  
 }

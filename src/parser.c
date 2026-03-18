@@ -167,17 +167,49 @@ AST_T* parser_parse_id(parser_T* parser)
   strcpy(value, parser->token->value);
   parser_eat(parser, TOKEN_ID);
   
-  // Assignment: x = 5
+  int parsed_data_type = 0; // 0 means "Unknown" or "No type specified"
+
+  // NEW: Check for the colon to capture the data type (e.g., :int)
+  if (parser->token->type == TOKEN_COLON)
+  {
+      parser_eat(parser, TOKEN_COLON);
+      
+      // Expect the 'int' keyword we added to the lexer
+      if (parser->token->type == TOKEN_KW_INT) {
+          parsed_data_type = 1; // 1 = Integer (You can use a macro here if you prefer)
+          parser_eat(parser, TOKEN_KW_INT);
+      } else {
+          printf("[Parser Error]: Expected a valid data type like 'int' after ':', but got '%s'\n", parser->token->value);
+          exit(1);
+      }
+  }
+
+  // Assignment: x:int = 5  OR  x = 5
   if(parser->token->type == TOKEN_EQUALS)
   {
     parser_eat(parser, TOKEN_EQUALS);
     AST_T* ast = init_ast(AST_ASSIGNMENT);
     ast->name = value;
+    ast->data_type = parsed_data_type; // Save the type into the AST node!
     ast->value = parser_parse_expr(parser);
     return ast; 
   }
 
-  // Variable or Function Call
+  // If a type was provided but NO equals sign (e.g., `x:int;`), handle it here
+  if (parsed_data_type != 0) {
+      // For now, we'll treat uninitialized variables as an assignment to 0
+      // You can change this later to a dedicated 'Declaration' AST node if you want
+      AST_T* ast = init_ast(AST_ASSIGNMENT);
+      ast->name = value;
+      ast->data_type = parsed_data_type;
+      
+      AST_T* default_val = init_ast(AST_INT);
+      default_val->int_value = 0;
+      ast->value = default_val;
+      return ast;
+  }
+
+  // Variable Access or Function Call
   AST_T* ast = init_ast(AST_VARIABLE);
   ast->name = value;
 
@@ -187,10 +219,7 @@ AST_T* parser_parse_id(parser_T* parser)
     ast->type = AST_CALL;
     AST_T* args_node = parser_parse_list(parser);
       
-      // 1. Give the backend the compound node (how you originally had it)
     ast->value = args_node;
-      
-      // 2. ALSO hand the arguments directly to the call node's children list!
     ast->children = args_node->children; 
   }
   // If it's an array access
@@ -199,13 +228,6 @@ AST_T* parser_parse_id(parser_T* parser)
       ast->type = AST_ACCESS;
       ast->value = parser_parse_list(parser);
   }
-
-
-  //comment this after testing
-  // if (ast->type == AST_CALL) {
-  //     printf("[Tracker] Parser created CALL '%s' at %p | value: %p | args: %zu\n", 
-  //            ast->name, (void*)ast, (void*)ast->value, ast->children ? ast->children->size : 0);
-  // }
 
   return ast;
 }

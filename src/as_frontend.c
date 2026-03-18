@@ -123,8 +123,25 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   }
   else 
   {
-    char* val_s = as_f(ast->value, list);
     AST_T* existing_var = var_lookup(list, ast->name);
+
+    // --- NEW: TYPE CHECKING GUARDRAILS ---
+    // 1 is our integer data type from the parser
+    if (ast->data_type == 1 && ast->value->type == AST_STRING) {
+        printf("[Type Error]: Cannot assign a string to integer variable '%s'\n", ast->name);
+        exit(1);
+    }
+
+    if (existing_var) {
+        // Prevent assigning a string to an existing integer variable
+        if (existing_var->data_type == 1 && ast->value->type == AST_STRING) {
+             printf("[Type Error]: Variable '%s' is an integer, cannot reassign to string.\n", ast->name);
+             exit(1);
+        }
+    }
+    // ---------------------------------------
+
+    char* val_s = as_f(ast->value, list);
 
     if (existing_var) {
         // Reassign existing variable: overwrite the memory directly
@@ -142,6 +159,11 @@ char* as_f_assignment(AST_T* ast, list_T* list)
         AST_T* local_var = init_ast(AST_VARIABLE);
         local_var->name = ast->name;
         local_var->int_value = current_local_offset;
+        
+        // --- NEW: SAVE THE DATA TYPE ---
+        local_var->data_type = ast->data_type; 
+        // -------------------------------
+
         current_local_offset -= 4; // Move offset down for the next variable
         
         list_push(list, local_var);
