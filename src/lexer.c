@@ -127,6 +127,7 @@ token_T* lexer_next_token(lexer_T* lexer)
       }
       case '*': return lexer_advance_current(lexer, TOKEN_MUL);
       case '/': return lexer_advance_current(lexer, TOKEN_DIV);
+      case '%': return lexer_advance_current(lexer, TOKEN_MOD);
       case '<': return lexer_advance_current(lexer, TOKEN_LT);
       case '>': return lexer_advance_current(lexer, TOKEN_GT);
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);

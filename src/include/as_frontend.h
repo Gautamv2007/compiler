@@ -18,6 +18,7 @@ char* as_f_call(AST_T* ast, list_T* list);
 char* as_f_int(AST_T* ast, list_T* list);
 char* as_f_binop(AST_T* ast, list_T* list); // New: Arithmetic handler
 char* as_f_while(AST_T* ast, list_T* list); // New: Loop handler
+char* as_f_if(AST_T* ast, list_T* list);    // New: Conditional handler
 char* as_f_access(AST_T* ast, list_T* list);
 
 #endif

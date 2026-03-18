@@ -15,13 +15,18 @@ pushl %ebp
 movl %esp, %ebp
 movl $10, %eax
 pushl %eax
-movl $20, %eax
+movl $5, %eax
 pushl %eax
-movl -4(%ebp), %eax
+movl $10, %eax
 pushl %eax
-call builtin_print_int
-addl $4, %esp
-movl -8(%ebp), %eax
+movl $5, %eax
+movl %eax, %ebx
+popl %eax
+cdq
+idivl %ebx
+movl %edx, %eax
+pushl %eax
+movl -12(%ebp), %eax
 pushl %eax
 call builtin_print_int
 addl $4, %esp

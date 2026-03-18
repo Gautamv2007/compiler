@@ -26,6 +26,7 @@ typedef struct TOKEN_STRUCT
     TOKEN_MINUS,
     TOKEN_MUL,
     TOKEN_DIV,
+    TOKEN_MOD,
     TOKEN_EQUALS_EQUALS,
     TOKEN_WHILE,
     TOKEN_IF,

@@ -32,42 +32,32 @@ AST_T* parser_parse_additive(parser_T* parser);
 AST_T* parser_parse_comparison(parser_T* parser);
 
 // 1. Factors: The smallest units (numbers, variables, or parenthesized expressions)
+// 1. Factors: The smallest units (numbers, variables, or parenthesized expressions)
 AST_T* parser_parse_factor(parser_T* parser) {
     switch (parser->token->type) {
         case TOKEN_ID:      return parser_parse_id(parser);
         case TOKEN_INT:     return parser_parse_int(parser);
         case TOKEN_LPAREN: {
-            parser_eat(parser, TOKEN_LPAREN);
+            // Use your existing list parser to handle the parentheses!
+            // It will read the inside, and if it sees an arrow `->`, it will 
+            // automatically build an AST_FUNCTION for us.
+            AST_T* list_node = parser_parse_list(parser);
             
-            // Case 1: Empty function definition, e.g., `main = () -> { ... }`
-            if (parser->token->type == TOKEN_RPAREN) {
-                parser_eat(parser, TOKEN_RPAREN);
-                
-                if (parser->token->type == TOKEN_ARROW_RIGHT) {
-                    parser_eat(parser, TOKEN_ARROW_RIGHT);
-                    AST_T* ast = init_ast(AST_FUNCTION);
-                    ast->children = init_list(sizeof(struct AST_STRUCT*)); // Empty arguments
-                    ast->value = parser_parse_compound(parser);
-                    return ast;
-                }
-                printf("[Parser]: Unexpected empty parentheses\n");
-                exit(1);
+            // If it parsed a function like `(a:int) -> { ... }`, return it!
+            if (list_node->type == AST_FUNCTION) {
+                return list_node;
             }
             
-            // Case 2: Parenthesized math `(5 + 2)` OR function with args `(x) -> { ... }`
-            AST_T* node = parser_parse_expr(parser);
-            parser_eat(parser, TOKEN_RPAREN);
-            
-            if (parser->token->type == TOKEN_ARROW_RIGHT) {
-                parser_eat(parser, TOKEN_ARROW_RIGHT);
-                AST_T* ast = init_ast(AST_FUNCTION);
-                ast->children = init_list(sizeof(struct AST_STRUCT*));
-                list_push(ast->children, node);
-                ast->value = parser_parse_compound(parser);
-                return ast;
+            // If it was just regular math inside parentheses like `(5 + 2)`,
+            // parser_parse_list wraps it in an AST_COMPOUND. We just want the math inside.
+            if (list_node->children->size == 1) {
+                AST_T* actual_expr = list_node->children->items[0];
+                free(list_node->children);
+                free(list_node); // Clean up the wrapper
+                return actual_expr;
             }
             
-            return node;
+            return list_node;
         }
         default: 
             printf("[Parser]: Unexpected token in factor `%s`\n", token_to_str(parser->token)); 
@@ -76,10 +66,15 @@ AST_T* parser_parse_factor(parser_T* parser) {
 }
 
 // 2. Multiplicative: Handles * and /
+// 2. Multiplicative: Handles *, /, and %
 AST_T* parser_parse_multiplicative(parser_T* parser) {
     AST_T* left = parser_parse_factor(parser);
 
-    while (parser->token->type == TOKEN_MUL || parser->token->type == TOKEN_DIV) {
+    // NEW: Added the modulo token to this loop!
+    while (parser->token->type == TOKEN_MUL || 
+           parser->token->type == TOKEN_DIV || 
+           parser->token->type == TOKEN_MOD)
+    {
         token_T* op_token = parser->token;
         parser_eat(parser, op_token->type);
 
@@ -127,7 +122,6 @@ AST_T* parser_parse_comparison(parser_T* parser) {
 }
 
 
-// This is now the entry point for an expression
 AST_T* parser_parse_expr(parser_T* parser) {
     
     // Check for "while"
@@ -140,6 +134,31 @@ AST_T* parser_parse_expr(parser_T* parser) {
         ast->left = parser_parse_block(parser); // The body
         return ast;
     }
+
+    // --- NEW: Check for "if" and "else" ---
+    if (parser->token->type == TOKEN_IF) {
+        parser_eat(parser, TOKEN_IF);
+        AST_T* ast = init_ast(AST_IF);
+        
+        // The condition
+        parser_eat(parser, TOKEN_LPAREN);
+        ast->value = parser_parse_expr(parser); 
+        parser_eat(parser, TOKEN_RPAREN);
+        
+        // The main 'if' body
+        ast->left = parser_parse_block(parser); 
+
+        // The optional 'else' body
+        if (parser->token->type == TOKEN_ELSE) {
+            parser_eat(parser, TOKEN_ELSE);
+            ast->right = parser_parse_block(parser);
+        } else {
+            ast->right = NULL; // Explicitly set to NULL if there is no else
+        }
+        
+        return ast;
+    }
+    // --------------------------------------
 
     // Check for "return"
     if (parser->token->type == TOKEN_RETURN) {

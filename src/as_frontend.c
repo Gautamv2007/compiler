@@ -58,10 +58,45 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     s = realloc(s, (strlen(right_s) + strlen(left_s) + strlen(template) + 512) * sizeof(char));
     sprintf(s, template, left_s, right_s);
 
-    // strcat uses single % because it isn't formatted
-    if (strcmp(ast->op, "+") == 0) strcat(s, "addl %ebx, %eax\n");
-    else if (strcmp(ast->op, "-") == 0) strcat(s, "subl %ebx, %eax\n");
-    else if (strcmp(ast->op, "*") == 0) strcat(s, "imull %ebx, %eax\n");
+    // Math Operators
+    if (strcmp(ast->op, "+") == 0) {
+        strcat(s, "addl %ebx, %eax\n");
+    } 
+    else if (strcmp(ast->op, "-") == 0) {
+        strcat(s, "subl %ebx, %eax\n");
+    } 
+    else if (strcmp(ast->op, "*") == 0) {
+        strcat(s, "imull %ebx, %eax\n");
+    }
+    else if (strcmp(ast->op, "/") == 0) {
+        strcat(s, "cdq\n"
+                  "idivl %ebx\n");
+    }
+    else if (strcmp(ast->op, "%") == 0){
+        strcat(s, "cdq\n"
+                  "idivl %ebx\n"
+                  "movl %edx, %eax\n"); // Move remainder into EAX
+    }
+    // Comparison Operators (NEW)
+    else if (strcmp(ast->op, "<") == 0) {
+        strcat(s, "cmpl %ebx, %eax\n"
+                  "setl %al\n"         // Set AL to 1 if Less
+                  "movzbl %al, %eax\n"); // Zero-extend AL to EAX
+    }
+    else if (strcmp(ast->op, ">") == 0) {
+        strcat(s, "cmpl %ebx, %eax\n"
+                  "setg %al\n"         // Set AL to 1 if Greater
+                  "movzbl %al, %eax\n"); 
+    }
+    else if (strcmp(ast->op, "==") == 0) {
+        strcat(s, "cmpl %ebx, %eax\n"
+                  "sete %al\n"         // Set AL to 1 if Equal
+                  "movzbl %al, %eax\n"); 
+    }
+    else {
+        printf("[Backend Error]: Unknown binary operator '%s'\n", ast->op);
+        exit(1);
+    }
     
     free(right_s);
     free(left_s);
@@ -88,6 +123,49 @@ char* as_f_while(AST_T* ast, list_T* list) {
 
     free(condition_s);
     free(body_s);
+    return s;
+}
+
+char* as_f_if(AST_T* ast, list_T* list) {
+    int label = label_count++;
+    
+    char* condition_s = as_f(ast->value, list); 
+    char* if_body_s = as_f(ast->left, list);      
+    char* else_body_s = ast->right ? as_f(ast->right, list) : calloc(1, sizeof(char));
+
+    char* s;
+    
+    // If we have an ELSE block attached
+    if (ast->right) {
+        s = calloc(strlen(condition_s) + strlen(if_body_s) + strlen(else_body_s) + 512, sizeof(char));
+        sprintf(s, 
+            "%s"                 // Evaluate condition (leaves 1 or 0 in EAX)
+            "cmpl $0, %%eax\n"   // Is it false (0)?
+            "je .L_ELSE_%d\n"    // If false, jump to the ELSE label
+            "%s"                 // Otherwise, run the IF body
+            "jmp .L_IF_END_%d\n" // And jump over the ELSE block
+            ".L_ELSE_%d:\n"      // <--- ELSE LABEL
+            "%s"                 // Run the ELSE body
+            ".L_IF_END_%d:\n",   // <--- END LABEL
+            // vvv FIX is here: removed the extra 'label' argument! vvv
+            condition_s, label, if_body_s, label, label, else_body_s, label);
+    } 
+    // If it's just a standard IF block (no else)
+    else {
+        s = calloc(strlen(condition_s) + strlen(if_body_s) + 512, sizeof(char));
+        sprintf(s, 
+            "%s"                 // Evaluate condition
+            "cmpl $0, %%eax\n"   // Is it false?
+            "je .L_IF_END_%d\n"  // If false, jump entirely over the IF body
+            "%s"                 // Otherwise, run the IF body
+            ".L_IF_END_%d:\n",   // <--- END LABEL
+            condition_s, label, if_body_s, label);
+    }
+
+    free(condition_s);
+    free(if_body_s);
+    if (ast->right) free(else_body_s);
+    
     return s;
 }
 
@@ -332,6 +410,7 @@ char* as_f(AST_T* ast, list_T* list) {
     case AST_INT:        return as_f_int(ast, list);
     case AST_BINOP:      return as_f_binop(ast, list);
     case AST_WHILE:      return as_f_while(ast, list);
+    case AST_IF:         return as_f_if(ast, list);
     default: { printf("[As frontend]: No implementation for type `%d`\n", ast->type); exit(1); }
   }
 }

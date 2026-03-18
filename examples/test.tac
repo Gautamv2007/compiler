@@ -1,7 +1,7 @@
 main = () -> {
-  x:int = 10;
-  y:int = 20;
-  print(x);
-  print(y);
-  return(0);
-};
+    a:int = 10;
+    b:int = 5;
+    c:int = 10%5;
+    print(c);
+    return(0);
+}

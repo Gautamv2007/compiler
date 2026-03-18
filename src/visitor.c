@@ -52,6 +52,7 @@ AST_T* visitor_visit(visitor_T* visitor, AST_T* node, list_T* list)
     // --- New Visitors ---
     case AST_BINOP:      return visitor_visit_binop(visitor, node, list);
     case AST_WHILE:      return visitor_visit_while(visitor, node, list);
+    case AST_IF:         return visitor_visit_if(visitor, node, list);
     
     default: { printf("[Visitor]: Don't know how to handle AST of type `%d`\n", node->type); exit(1); }
   }
@@ -146,5 +147,26 @@ AST_T* visitor_visit_int(visitor_T* visitor, AST_T* node, list_T* list)
 AST_T* visitor_visit_access(visitor_T* visitor, AST_T* node, list_T* list)
 {
   return node;
+}
+
+
+AST_T* visitor_visit_if(visitor_T* visitor, AST_T* node, list_T* list)
+{
+  AST_T* if_node = init_ast(AST_IF);
+  
+  // 1. Visit the condition
+  if_node->value = visitor_visit(visitor, node->value, list);
+  
+  // 2. Visit the main 'if' body
+  if_node->left = visitor_visit(visitor, node->left, list);
+  
+  // 3. Visit the 'else' body if it exists
+  if (node->right) {
+      if_node->right = visitor_visit(visitor, node->right, list);
+  } else {
+      if_node->right = NULL;
+  }
+  
+  return if_node;
 }
 
