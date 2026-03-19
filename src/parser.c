@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 
+// --- NEW: A simple Symbol Table to remember variable types ---
+char* sym_names[1000];
+int sym_types[1000];
+int sym_count = 0;
+// -----------------------------------------------------------
+
 parser_T* init_parser(lexer_T* lexer)
 {
   parser_T* parser = calloc(1, sizeof(struct PARSER_STRUCT)); 
@@ -187,6 +193,55 @@ AST_T* parser_parse(parser_T* parser)
   return parser_parse_compound(parser);
 }
 
+// --- NEW: Recursive Type Checker ---
+int get_expression_type(AST_T* node) {
+    if (node == NULL) return 0; 
+
+    switch (node->type) {
+        case AST_INT: 
+            return 1; // 1 = int
+            
+        case AST_STRING: 
+            return 2; // 2 = string
+            
+        case AST_CALL:
+            if (strcmp(node->name, "to_int") == 0) return 1;
+            if (strcmp(node->name, "input") == 0) return 2;
+            if (strcmp(node->name, "input_line") == 0) return 2;
+            return 0; 
+            
+        case AST_BINOP: {
+            // Dig into the math operation
+            int left_type = get_expression_type(node->left);
+            int right_type = get_expression_type(node->right);
+            
+            if (left_type != 0 && right_type != 0) {
+                if (left_type != right_type) {
+                    printf("[Type Error]: Cannot perform '%s' between '%s' and '%s'\n", 
+                        node->op,
+                        left_type == 1 ? "int" : "string",
+                        right_type == 1 ? "int" : "string");
+                    exit(1);
+                }
+            }
+            return left_type; 
+        }
+
+        // Add this right above your default: case
+        case AST_VARIABLE: {
+            for (int i = 0; i < sym_count; i++) {
+                if (strcmp(sym_names[i], node->name) == 0) {
+                    return sym_types[i]; // Found it! Return the saved type.
+                }
+            }
+            return 0; // Not found in our table, return unknown.
+        }
+        
+        default:
+            return 0; 
+    }
+}
+
 AST_T* parser_parse_id(parser_T* parser)
 {
   char* value = calloc(strlen(parser->token->value) + 1, sizeof(char));
@@ -222,9 +277,66 @@ AST_T* parser_parse_id(parser_T* parser)
     parser_eat(parser, TOKEN_EQUALS);
     AST_T* ast = init_ast(AST_ASSIGNMENT);
     ast->name = value;
-    ast->data_type = parsed_data_type; // Save the type into the AST node!
-    ast->value = parser_parse_expr(parser);
-    return ast; 
+    ast->data_type = parsed_data_type; 
+    ast->value = parser_parse_expr(parser); 
+
+    int assigned_type = get_expression_type(ast->value);
+
+    // --- NEW: Check if the variable ALREADY exists in our memory ---
+    int existing_type = 0;
+    for (int i = 0; i < sym_count; i++) {
+        if (strcmp(sym_names[i], ast->name) == 0) {
+            existing_type = sym_types[i]; // We found it!
+            break;
+        }
+    }
+
+    if (existing_type != 0) 
+    {
+        // CASE 1: The user tried to re-declare the type (e.g., x:string = "hello")
+        if (parsed_data_type != 0 && parsed_data_type != existing_type) {
+            printf("\n[Semantic Error]: Variable '%s' already defined as '%s'.\n", 
+                   ast->name, existing_type == 1 ? "int" : "string");
+            printf("  -> You cannot re-declare it as '%s'!\n", 
+                   parsed_data_type == 1 ? "int" : "string");
+            exit(1);
+        }
+        
+        // CASE 2: They didn't re-declare the type, but tried to assign the wrong value type (e.g., x = "hello")
+        if (assigned_type != 0 && assigned_type != existing_type) {
+            printf("\n[Semantic Error]: Cannot assign a '%s' to variable '%s' (which is of type '%s').\n", 
+                   assigned_type == 1 ? "int" : "string", 
+                   ast->name, 
+                   existing_type == 1 ? "int" : "string");
+            exit(1);
+        }
+    } 
+    else 
+    {
+        // IT IS A BRAND NEW VARIABLE!
+        if (parsed_data_type != 0) {
+            // They explicitly provided a type (x:int = 5)
+            if (assigned_type != 0 && parsed_data_type != assigned_type) {
+                printf("\n[Semantic Error]: Type Mismatch for variable '%s'\n", ast->name);
+                exit(1);
+            }
+            // Save to Symbol Table
+            sym_names[sym_count] = ast->name;
+            sym_types[sym_count] = parsed_data_type;
+            sym_count++;
+        } 
+        else if (assigned_type != 0) {
+            // BONUS: TYPE INFERENCE! 
+            // If they just wrote `x = 5;` without `:int`, we can automatically guess the type!
+            sym_names[sym_count] = ast->name;
+            sym_types[sym_count] = assigned_type;
+            sym_count++;
+            ast->data_type = assigned_type; // Update the AST node so the code generator knows
+        }
+    }
+    // ---------------------------------------------------------------
+
+    return ast;
   }
 
   // If a type was provided but NO equals sign (e.g., `x:int;`), handle it here

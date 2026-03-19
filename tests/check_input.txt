@@ -1,6 +1,6 @@
 main = () -> {
     x:int = to_int(input());
-    msg:int = input_line();
+    msg:string = input_line();
 
     print(x, " ", msg);
 

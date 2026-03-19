@@ -1,11 +1,11 @@
-main = () -> {
-  x:int = to_int(input());
-  y:int = to_int(input());
+print_hello = (void) -> {
+  print("hello world\n");
+}
 
-  name:string = input_line();
-
-  print("Number: ", x, " and ", y, "\n");
-  print("Name: ", name, "\n");
-
-  return 0;
+main = (void) -> {
+  i:int = 0;
+  while(i < 5){
+    print_hello();
+    i = i + 1;
+  }
 }

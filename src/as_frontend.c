@@ -4,6 +4,12 @@
 #include <string.h>
 #include <stdio.h>
 
+// --- CONSTANT PROPAGATION NOTEPAD ---
+char* tracked_vars[100];
+int tracked_vals[100];
+int tracked_count = 0;
+// ------------------------------------
+
 static int label_count = 0;
 static int current_local_offset = -4; // Start at -4 for the first local variable
 
@@ -100,8 +106,70 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         strcat(s, "imull %ebx, %eax\n");
     }
     else if (strcmp(ast->op, "/") == 0) {
-        strcat(s, "cdq\n"
-                  "idivl %ebx\n");
+      // --- THE REAL Anti-Div-By-Zero Guardrail ---
+      // We check the actual integer value instead of the name pointer!
+      if (ast->right->type == AST_INT && ast->right->int_value == 0) 
+      {
+          printf("\n[Math Error]: Division by literal zero detected!\n");
+          printf("  -> You are trying to divide by '0'.\n");
+          exit(1);
+      }
+
+      // Check 2: Did they use a variable that we KNOW is zero? (e.g., 10 / y)
+      if (ast->right->type == AST_VARIABLE && ast->right->name != NULL) 
+      {
+          // Look up the variable in our notepad
+          for (int i = 0; i < tracked_count; i++) {
+              if (strcmp(tracked_vars[i], ast->right->name) == 0) {
+                  // We found it! Is the value zero?
+                  if (tracked_vals[i] == 0) {
+                      printf("\n[Math Error]: Division by zero detected via variable '%s'!\n", ast->right->name);
+                      printf("  -> My Constant Propagation engine tracked '%s' and knows it currently holds '0'.\n", ast->right->name);
+                      exit(1);
+                  }
+                  break; // We found the variable, no need to keep searching
+              }
+          }
+      }
+      // -------------------------------------------
+
+      // Generate assembly for left and right sides
+      char* left_val = as_f(ast->left, list);
+      char* right_val = as_f(ast->right, list);
+
+      // --- NEW: Run-Time Guardrail ---
+      // We use a static counter so every division gets a unique label!
+      static int div_count = 0; 
+      div_count++;
+
+      // Assembly template:
+      const char* template = 
+          "%s"                   // 1. Evaluate left side (puts result in %eax)
+          "pushl %%eax\n"        // 2. Save dividend on the stack
+          "%s"                   // 3. Evaluate right side (puts result in %eax)
+          "movl %%eax, %%ebx\n"  // 4. Move right side to %ebx (the divisor)
+          "popl %%eax\n"         // 5. Restore left side to %eax (the dividend)
+          
+          // RUN-TIME SAFETY CHECK
+          "cmpl $0, %%ebx\n"               // Is the divisor zero?
+          "jne .L_safe_div_%d\n"           // If NOT zero, jump down to the safe math
+          "movl $1, %%eax\n"               // If IS zero, prepare sys_exit (1)
+          "movl $1, %%ebx\n"               // Exit code 1 (clean crash)
+          "int $0x80\n"                    // Call Linux to kill the program
+          ".L_safe_div_%d:\n"              // <-- The safe jump target!
+          
+          // The actual division
+          "cdq\n"                // Sign-extend %eax into %edx (required for idivl)
+          "idivl %%ebx\n";       // Divide %edx:%eax by %ebx. Result goes in %eax!
+
+      // Calculate memory needed for the string (adding room for our %d integers)
+      s = realloc(s, (strlen(template) + strlen(left_val) + strlen(right_val) + 64) * sizeof(char));
+      
+      // Inject the values AND our unique division counter!
+      sprintf(s, template, left_val, right_val, div_count, div_count);
+      
+      free(left_val);
+      free(right_val);
     }
     else if (strcmp(ast->op, "%") == 0){
         strcat(s, "cdq\n"
@@ -206,34 +274,27 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   
   if (ast->value->type == AST_FUNCTION)
   {
-    current_local_offset = -4; // Reset offset for new functions
+    // ... [Your existing function definition logic stays exactly the same!] ...
+    current_local_offset = -4; 
     AST_T* as_val = ast->value;
 
-    // --- 1. CRITICAL FIX: REGISTER PARAMETERS FIRST! ---
-    // We MUST put parameters in the symbol table before hoisting locals.
     if (as_val->children) {
         for(unsigned int i = 0; i < as_val->children->size; i++)
         {
           AST_T* farg = (AST_T*) as_val->children->items[i];
-          
-          // Safety check: Only push if it's not already there
           if (!var_lookup(list, farg->name)) {
               AST_T* arg_variable = init_ast(AST_VARIABLE);
               arg_variable->name = farg->name;
-              arg_variable->int_value = 8 + (i * 4); // POSITIVE offsets! 8, 12, 16...
-              arg_variable->data_type = farg->data_type; // Pass data type just in case
+              arg_variable->int_value = 8 + (i * 4); 
+              arg_variable->data_type = farg->data_type; 
               list_push(list, arg_variable);
           }
         }
     }
-    // ---------------------------------------------------
 
-    // 2. NOW safely hoist the rest of the local variables
     hoist_local_variables(ast->value, list);
+    int stack_space_needed = (-current_local_offset) - 4; 
 
-    int stack_space_needed = (-current_local_offset) - 4; // Total space for locals + return address
-
-    // 3. Generate Function Prologue
     const char* template = ".globl %s\n"
                            "%s:\n"
                            "pushl %%ebp\n"
@@ -242,22 +303,89 @@ char* as_f_assignment(AST_T* ast, list_T* list)
     s = realloc(s, (strlen(template) + (strlen(ast->name) * 2) + 64) * sizeof(char));
     sprintf(s, template, ast->name, ast->name, stack_space_needed);
 
+
+    // --- MISSING RETURN GUARDRAIL ---
+    AST_T* func_body = as_val->value; // This is the AST_COMPOUND block (the "{ ... }")
+
+    if (func_body && func_body->children && func_body->children->size > 0) 
+    {
+        // Grab the very last statement in the function body
+        AST_T* last_stmt = (AST_T*) func_body->children->items[func_body->children->size - 1];
+
+        // Check if it's a return statement.
+        // *Note: I am assuming your parser stores returns as AST_STATEMENT with the name "return".
+        // Adjust this if your AST stores it differently!
+        int has_return = (last_stmt->type == AST_STATEMENT && 
+                          last_stmt->name != NULL && 
+                          strcmp(last_stmt->name, "return") == 0);
+
+        // If there is NO return, throw our error!
+        if (!has_return) {
+            // Check if the first argument is "void"
+            AST_T* first_arg = (as_val->children && as_val->children->size > 0) ? 
+                               (AST_T*)as_val->children->items[0] : NULL;
+
+            int is_void = (first_arg && first_arg->name && strcmp(first_arg->name, "void") == 0);
+
+            if (!is_void) {
+                printf("\n[Compiler Error]: Missing return value in function '%s'!\n", ast->name);
+                exit(1);
+            }
+            // If it IS void, we skip the error and let the Safety Net handle the return!
+        }
+    }
+    // --------------------------------
+
     // 4. Generate Function Body
     char* as_val_val = as_f(as_val->value, list);
-    s = realloc(s, (strlen(s) + strlen(as_val_val) + 1) * sizeof(char));
+    
+    // --- NEW: THE VOID SAFETY NET ---
+    // This safely closes the stack frame and returns, preventing Segfaults
+    // if the user drops off the edge of a void function.
+    const char* void_epilogue = "\n"
+                                "movl %ebp, %esp\n"
+                                "popl %ebp\n"
+                                "ret\n";
+                                
+    // Allocate space for the body AND our new safety net
+    s = realloc(s, (strlen(s) + strlen(as_val_val) + strlen(void_epilogue) + 1) * sizeof(char));
+    
     strcat(s, as_val_val);
+    strcat(s, void_epilogue); // Inject the safety net at the very bottom!
+    // --------------------------------
+    
     free(as_val_val);
   }
   else 
   {
     AST_T* existing_var = var_lookup(list, ast->name);
     
-    // --- ADD THIS SAFETY CHECK ---
     if (!existing_var) {
         printf("Compiler Error: Variable '%s' was not found or hoisted!\n", ast->name);
         exit(1); 
     }
-    // -----------------------------
+
+    // --- NEW: CONSTANT PROPAGATION NOTEPAD LOGIC ---
+    // We only track the value if they are assigning a literal integer!
+    if (ast->value != NULL && ast->value->type == AST_INT) 
+    {
+        int found = 0;
+        // 1. Check if we are already tracking this variable
+        for (int i = 0; i < tracked_count; i++) {
+            if (strcmp(tracked_vars[i], ast->name) == 0) {
+                tracked_vals[i] = ast->value->int_value; // Update existing value
+                found = 1;
+                break;
+            }
+        }
+        // 2. If it is a new variable, add it to the notepad
+        if (!found) {
+            tracked_vars[tracked_count] = ast->name;
+            tracked_vals[tracked_count] = ast->value->int_value;
+            tracked_count++;
+        }
+    }
+    // -----------------------------------------------
 
     char* val_s = as_f(ast->value, list);
 
@@ -322,15 +450,20 @@ const char* asm_builtins =
 "    int $0x80\n"
 "    popl %ebp\n"
 "    ret\n"
-// --- NEW: Print Integer (No Newline) ---
+// --- NEW: Print Integer (No Newline, with negative handling) ---
 "builtin_print_int:\n"
 "    pushl %ebp\n"
 "    movl %esp, %ebp\n"
 "    subl $16, %esp\n"            
 "    movl 8(%ebp), %eax\n"        
+"    movl %eax, %ecx\n"           // NEW: Save a copy of the original number to check the sign later
+"    testl %eax, %eax\n"          // NEW: Is the number negative?
+"    jns .L_is_positive\n"        // NEW: If positive (or zero), jump over the negation
+"    negl %eax\n"                 // NEW: Flip the bits to make it a positive number!
+".L_is_positive:\n"
 "    movl $10, %esi\n"
 "    leal 16(%esp), %edi\n"       // Start at the very end of the 16-byte buffer
-"    decl %edi\n"                 // Step back 1 byte (We no longer write '10' here!)
+"    decl %edi\n"                 
 ".L_convert_loop:\n"
 "    xorl %edx, %edx\n"
 "    divl %esi\n"                 
@@ -339,12 +472,17 @@ const char* asm_builtins =
 "    decl %edi\n"
 "    testl %eax, %eax\n"
 "    jnz .L_convert_loop\n"
+"    testl %ecx, %ecx\n"          // NEW: Was the ORIGINAL number negative?
+"    jns .L_skip_minus\n"         // NEW: If it was positive, skip adding the minus sign
+"    movb $45, (%edi)\n"          // NEW: Put a '-' (ASCII 45) in the buffer right before the digits!
+"    decl %edi\n"                 // NEW: Step back one more byte so 'incl %edi' works correctly
+".L_skip_minus:\n"
 "    incl %edi\n"                 
 "    movl $4, %eax\n"             
 "    movl $1, %ebx\n"             
-"    movl %edi, %ecx\n"           
+"    movl %edi, %ecx\n"           // (This safely overwrites our sign copy, we don't need it anymore)
 "    leal 16(%esp), %edx\n"       
-"    subl %edi, %edx\n"           // Calculate the exact length of the digits
+"    subl %edi, %edx\n"           // Because we added the '-', this length calculation automatically includes it!
 "    int $0x80\n"
 "    addl $16, %esp\n"
 "    popl %ebp\n"
@@ -355,34 +493,6 @@ const char* asm_builtins =
 ".section .data\n"
 "current_input_ptr: .long global_input_buffer\n"
 ".section .text\n"
-
-// "builtin_input:\n"
-// "    pushl %ebp\n"
-// "    movl %esp, %ebp\n"
-// "    movl $3, %eax\n"                     // sys_read
-// "    movl $0, %ebx\n"                     // stdin
-// "    movl current_input_ptr, %ecx\n"      
-// "    movl $255, %edx\n"                   
-// "    int $0x80\n"                         // Read input. EAX holds the number of bytes read.
-// // --- Strip Newline and Bump Allocator ---
-// "    movl current_input_ptr, %ebx\n"      // Save the start address in EBX
-// "    movl %ebx, %ecx\n"                   
-// "    addl %eax, %ecx\n"                   // Move ECX to the very end of what was typed
-// "    decl %ecx\n"                         // Step back one character (to look at the last thing typed)
-// "    cmpb $10, (%ecx)\n"                  // Is it a newline (\n)?
-// "    jne .L_no_newline\n"                 // If not, jump down
-// "    movb $0, (%ecx)\n"                   // YES! Overwrite the \n with a null terminator (\0)
-// "    incl %ecx\n"                         // Move forward 1 byte for the next allocation
-// "    jmp .L_save_ptr\n"
-// ".L_no_newline:\n"
-// "    incl %ecx\n"                         // Step forward past the last character
-// "    movb $0, (%ecx)\n"                   // Add a null terminator
-// "    incl %ecx\n"                         // Move forward 1 byte for the next allocation
-// ".L_save_ptr:\n"
-// "    movl %ecx, current_input_ptr\n"      // Save the new free-space pointer!
-// "    movl %ebx, %eax\n"                   // Return the original string address in EAX
-// "    popl %ebp\n"
-// "    ret\n"
 
 "builtin_input:\n"
 "    pushl %ebp\n"
@@ -454,26 +564,57 @@ const char* asm_builtins =
 "    ret\n"
 
 // --- Convert String to Int ---
-"builtin_int:\n"
+"builtin_to_int:\n"
 "    pushl %ebp\n"
 "    movl %esp, %ebp\n"
-"    movl 8(%ebp), %esi\n"                // Grab string address
-"    xorl %eax, %eax\n"                   
-"    xorl %ebx, %ebx\n"                   
-".L_int_loop:\n"
-"    movb (%esi), %bl\n"                  
-"    cmpb $10, %bl\n"                     // Stop at newline
-"    je .L_int_done\n"
-"    cmpb $0, %bl\n"                      // Stop at null terminator
-"    je .L_int_done\n"
-"    subb $48, %bl\n"                     
-"    imull $10, %eax\n"                   
-"    addl %ebx, %eax\n"                   
-"    incl %esi\n"                         
-"    jmp .L_int_loop\n"
-".L_int_done:\n"
+"    pushl %esi\n"               // Save %esi
+"    pushl %ebx\n"               // Save %ebx
+"    movl 8(%ebp), %esi\n"       // Get the string pointer from the stack
+"    xorl %eax, %eax\n"          // %eax will be our final result. Set to 0.
+"    xorl %ebx, %ebx\n"          // %ebx will hold the current character. Set to 0.
+"    xorl %ecx, %ecx\n"          // %ecx will be our 'is negative' flag. Set to 0.
+
+// 1. Check if the string starts with a minus sign '-'
+"    movb (%esi), %bl\n"         // Read the first character
+"    cmpb $45, %bl\n"            // Is it '-' (ASCII 45)?
+"    jne .L_to_int_loop\n"       // If not, jump straight to the loop
+"    movl $1, %ecx\n"            // It IS negative! Set our flag to 1
+"    incl %esi\n"                // Move the pointer past the '-' character
+
+// 2. The Conversion Loop
+".L_to_int_loop:\n"
+"    movb (%esi), %bl\n"         // Read the next character
+"    testb %bl, %bl\n"           // Is it the null terminator (0)?
+"    jz .L_to_int_done\n"        // If yes, we are done!
+"    cmpb $10, %bl\n"            // Is it a newline (\n)? (From input_line)
+"    je .L_to_int_done\n"        // If yes, we are done!
+
+"    cmpb $48, %bl\n"            // Is it less than '0'?
+"    jl .L_to_int_skip\n"        // Invalid char, skip it
+"    cmpb $57, %bl\n"            // Is it greater than '9'?
+"    jg .L_to_int_skip\n"        // Invalid char, skip it
+
+// It is a valid number! Math time: (Result * 10) + (char - '0')
+"    subb $48, %bl\n"            // Convert ASCII character to real number ('5' -> 5)
+"    imull $10, %eax\n"          // Multiply current total by 10
+"    addl %ebx, %eax\n"          // Add the new digit
+
+".L_to_int_skip:\n"
+"    incl %esi\n"                // Move pointer to the next character
+"    jmp .L_to_int_loop\n"       // Loop back around
+
+// 3. Finalize and Return
+".L_to_int_done:\n"
+"    testl %ecx, %ecx\n"         // Check our negative flag
+"    jz .L_to_int_exit\n"        // If it's 0, just exit
+"    negl %eax\n"                // If it's 1, negate %eax to make it a negative number!
+
+".L_to_int_exit:\n"
+"    popl %ebx\n"                // Restore registers
+"    popl %esi\n"
+"    movl %ebp, %esp\n"
 "    popl %ebp\n"
-"    ret\n";
+"    ret\n";                      // Return the integer in %eax!
 
 char* as_f_call(AST_T* ast, list_T* list)
 {
@@ -567,10 +708,22 @@ char* as_f_call(AST_T* ast, list_T* list)
   else if (strcmp(ast->name, "to_int") == 0)
   {
     AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
+
+    // --- NEW: The Anti-Segfault Guardrail ---
+    // If the user literally typed to_int(123), stop the compiler right now!
+    if (first_arg != NULL && first_arg->type == AST_INT) {
+        printf("\n[Semantic Error]: Invalid argument for 'to_int()'.\n");
+        printf("  -> You passed an integer literal, but it expects a string.\n");
+        printf("  -> Hint: Use quotes! Did you mean \"123\" instead of 123?\n");
+        exit(1); 
+    }
+    // ----------------------------------------
+
+    // If it is a string, generate the assembly normally!
     char* val_s = as_f(first_arg, list);
     const char* template = "%s" 
                            "pushl %%eax\n"    
-                           "call builtin_int\n"
+                           "call builtin_to_int\n"
                            "addl $4, %%esp\n"; 
     
     s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));

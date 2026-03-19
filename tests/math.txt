@@ -2,5 +2,6 @@ main = () -> {
   print(10 + 5 * 2, "\n");
   print((20-4)/4, "\n");
   print(17%5, "\n");
+  print(5-10, "\n");
   return 0;
 }
