@@ -1,183 +1,174 @@
-# GVR Compiler
+GVR Compiler
 
-> A custom-designed, statically-typed programming language implemented in C, featuring a modular frontend pipeline and direct compilation to 32-bit x86 Linux Assembly.
+A custom-designed, statically-typed programming language implemented in C, featuring a modular frontend pipeline and direct compilation to 32-bit x86 Linux assembly.
 
----
+Overview
 
-## Overview
-
-This project demonstrates the design of a complete compiler from scratch, taking high-level, Python-inspired syntax and translating it down to bare-metal machine code without the use of virtual machines or intermediate interpreters.
+This project demonstrates the design of a complete compiler from scratch, translating high-level, Python-inspired syntax into low-level machine code without using virtual machines or intermediate interpreters.
 
 The compiler supports:
-- Strict static typing
-- Dynamic memory allocation for strings
-- A Python-style variadic `print` function
-- Seamless interactive system I/O
 
-The complete architecture was developed in C and utilizes the GNU Toolchain for assembling and linking.
+Strict static typing
 
----
+Dynamic memory allocation for strings
 
-## Highlights
+A Python-style variadic print function
 
-✔ Compiled natively to x86 Assembly  
-✔ Static typing enforcement (`int`, `str`)  
-✔ Dynamic Bump Allocator for RAM management  
-✔ Python-style variadic `print()`  
-✔ Interactive `input()` and type-casting `to_int()`  
-✔ Modular Lexer, Parser, and AST pipeline  
-✔ Native Linux Kernel system calls (`int 0x80`)  
+Interactive system I/O
 
----
+The architecture is implemented in C and uses the GNU toolchain for assembling and linking.
 
-## System Specifications
+Highlights
 
-| Component            | Configuration                     |
-|----------------------|-----------------------------------|
-| Host Language        | C                                 |
-| Target Architecture  | 32-bit x86 Linux                  |
-| Target Assembly      | AT&T Syntax                       |
-| Supported Data Types | Integer (`int`), String (`str`)   |
-| Memory Management    | Custom Bump Allocator (1KB Buffer)|
-| I/O Interface        | Direct Linux Syscalls             |
-| Program Flow         | Sequential, Branches, Loops       |
+Compiles natively to x86 assembly
 
----
+Static typing (int, str)
 
-## Architecture Blocks
+Custom bump allocator for memory management
 
-*(Note: You can insert a block diagram image of your Compiler Pipeline here once you upload one to GitHub!)*
+Variadic print() function
+
+Interactive input() and to_int() conversion
+
+Modular lexer, parser, and AST pipeline
+
+Direct Linux system calls using int 0x80
+
+System Specifications
+Component	Configuration
+Host Language	C
+Target Architecture	32-bit x86 Linux
+Target Assembly	AT&T Syntax
+Supported Data Types	Integer (int), String (str)
+Memory Management	Bump Allocator (1 KB buffer)
+I/O Interface	Linux Syscalls
+Program Flow	Sequential, branches, loops
+Architecture
 
 The compiler consists of the following modular phases:
 
-- **Lexical Analyzer (Lexer)** – Tokenizes raw source code  
-- **Parser** – Validates grammar and constructs the Abstract Syntax Tree (AST)  
-- **Semantic Analyzer (Visitor)** – Traverses the AST, tracking variable scopes and types  
-- **Code Generator** – Translates AST nodes into x86 assembly instructions  
-- **Assembler (`as`)** – Converts assembly into object code  
-- **Linker (`ld`)** – Stitches object code into an ELF executable  
+Lexical Analyzer (Lexer) – Tokenizes source code
 
----
+Parser – Validates syntax and builds the AST
 
-## Syntax & Formats
+Semantic Analyzer (Visitor) – Handles scope and type checking
 
-### Variable Declaration & Assignment
-```typescript
-name:str = "Gautam";
-age:int = 18;
+Code Generator – Produces x86 assembly
 
+Assembler (as) – Generates object code
 
----
+Linker (ld) – Produces the final executable
 
-## 🛠️ Built-in Functions & Operations
+Syntax
+Variable Declaration and Assignment
+name: str = "Gautam";
+age: int = 18;
+Built-in Functions
+Standard I/O
 
-### Standard I/O
-- **`print(arg1, arg2, ...)`** – Variadic printing supporting mixed data types.
-- **`input()`** – Reads input from standard input into a dynamically allocated buffer.
+print(arg1, arg2, ...)
+Variadic function supporting mixed data types
 
-### Data Conversion
-- **`to_int(string)`** – Converts ASCII string input into integer values.
+input()
+Reads input into a dynamically allocated buffer
 
-### Control Flow
-- **`if` / `else`** statements
-- **`while`** loops
+Data Conversion
 
----
+to_int(string)
+Converts ASCII string to integer
 
-## ⚙️ System-Level Integration
+Control Flow
 
-### Assembly Macros
-- **`sys_read`** – Reads from file descriptor 0 (`stdin`).
-- **`sys_write`** – Writes to file descriptor 1 (`stdout`).
-- **`sys_exit`** – Terminates the program with status 0.
+if / else statements
 
----
+while loops
 
-## 🧠 Backend Engine Design
+System-Level Integration
+Assembly Macros
 
-The compiler backend integrates several optimized components:
+sys_read – Reads from stdin (file descriptor 0)
 
-- **Bump Allocator** – Efficiently stores variable-length inputs sequentially in memory without overwrites.
-- **String-to-Integer Converter** – Implements ASCII parsing using arithmetic logic for base-10 integer generation.
-- **Variadic Call Handler** – Dynamically dispatches arguments to `builtin_print_int` or `builtin_print_str` based on AST type information.
+sys_write – Writes to stdout (file descriptor 1)
 
----
+sys_exit – Terminates program
 
-## 📂 Project Structure
+Backend Design
 
-```text
+The backend includes:
+
+Bump Allocator
+Sequential memory allocation without deallocation
+
+String-to-Integer Converter
+Parses ASCII input into base-10 integers
+
+Variadic Call Handler
+Dispatches arguments to appropriate print handlers based on type
+
+Project Structure
 GVR-Compiler/
 ├── src/
-│   ├── lexer.c        # Tokenization of input
-│   ├── parser.c       # Grammar enforcement & AST generation
-│   ├── visitor.c      # Symbol table & semantic handling
-│   ├── as_frontend.c  # Assembly code generation
-│   └── main.c         # Entry point
+│   ├── lexer.c
+│   ├── parser.c
+│   ├── visitor.c
+│   ├── as_frontend.c
+│   └── main.c
 ├── include/
-│   ├── token.h        # Token definitions
-│   ├── ast.h          # AST structures
+│   ├── token.h
+│   ├── ast.h
 │   └── ...
 ├── examples/
-│   └── test.gv        # Sample program
-├── Makefile           # Build automation
+│   └── test.gv
+├── Makefile
 └── README.md
+Module Description
+Module	Description
+lexer.c	Tokenizes input source
+parser.c	Builds AST from tokens
+visitor.c	Performs semantic analysis
+as_frontend.c	Generates assembly code
+ast.c / ast.h	Defines AST structures
+Tools Used
 
+GCC (requires gcc-multilib for 32-bit builds)
 
-Markdown
-## Module Description
+GNU Make
 
-| Module | Description |
-|--------|-------------|
-| **`lexer.c`** | Breaks the input stream into tokens. |
-| **`parser.c`** | Builds the AST based on language grammar. |
-| **`visitor.c`** | Handles symbol tables, memory offsets, and types. |
-| **`as_frontend.c`** | Generates x86 assembly and built-in macros. |
-| **`ast.c` / `ast.h`** | Defines AST node structures. |
+GNU Binutils (as, ld)
 
----
-
-## Tools Used
-
-- **GCC** → C Compiler *(Requires `gcc-multilib` for 32-bit output on 64-bit systems)*
-- **GNU Make** → Build automation
-- **GNU Binutils (`as`, `ld`)** → Assembly and linking
-
----
-
-## 🚀 Quick Start
-
-### 1. Build the Compiler
-```bash
+Quick Start
+1. Build the Compiler
 make
-## 2. Compile a Script
-```Bash
+2. Compile a Script
 ./gvr.out examples/test.gv
-## 3. Run the Output
-```Bash
+3. Run the Output
 ./a.out
-### Future Enhancements
-Support for floating-point arithmetic (float)
+Future Enhancements
 
-User-defined functions with parameters
+Floating-point support (float)
 
-Array support and contiguous memory structures
+User-defined functions
+
+Array support
 
 for loop syntax
 
 Standard library and module system
 
-## Author
-Gautam V (Student)
+Author
 
-Interests:
+Gautam V
 
-Compiler Construction & Language Design
+Interests
 
-Systems Programming
+Compiler construction
 
-Low-Level Architecture
+Systems programming
 
-##Notes
-This project is intended for educational purposes and demonstrates the end-to-end pipeline of a compiler:
+Low-level architecture
+
+Notes
+
+This project demonstrates a complete compiler pipeline:
 
 Lexing → Parsing → AST → Code Generation → Execution
