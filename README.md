@@ -62,6 +62,7 @@ The compiler consists of the following modular phases:
 name:str = "Gautam";
 age:int = 18;
 
+---
 
 ---
 
@@ -99,7 +100,7 @@ The compiler backend integrates several optimized components:
 
 ---
 
-##  Project Structure
+## Project Structure
 
 ```text
 GVR-Compiler/
@@ -118,62 +119,4 @@ GVR-Compiler/
 ├── Makefile           # Build automation
 └── README.md
 
-
-Markdown
-## Module Description
-
-| Module | Description |
-|--------|-------------|
-| **`lexer.c`** | Breaks the input stream into tokens. |
-| **`parser.c`** | Builds the AST based on language grammar. |
-| **`visitor.c`** | Handles symbol tables, memory offsets, and types. |
-| **`as_frontend.c`** | Generates x86 assembly and built-in macros. |
-| **`ast.c` / `ast.h`** | Defines AST node structures. |
-
 ---
-
-## Tools Used
-
-- **GCC** → C Compiler *(Requires `gcc-multilib` for 32-bit output on 64-bit systems)*
-- **GNU Make** → Build automation
-- **GNU Binutils (`as`, `ld`)** → Assembly and linking
-
----
-
-##  Quick Start
-
-### 1. Build the Compiler
-```bash
-make
-## 2. Compile a Script
-```Bash
-./gvr.out examples/test.gv
-## 3. Run the Output
-```Bash
-./a.out
-### Future Enhancements
-Support for floating-point arithmetic (float)
-
-User-defined functions with parameters
-
-Array support and contiguous memory structures
-
-for loop syntax
-
-Standard library and module system
-
-## Author
-Gautam V (Student)
-
-Interests:
-
-Compiler Construction & Language Design
-
-Systems Programming
-
-Low-Level Architecture
-
-##Notes
-This project is intended for educational purposes and demonstrates the end-to-end pipeline of a compiler:
-
-Lexing → Parsing → AST → Code Generation → Execution
