@@ -61,62 +61,131 @@ The compiler consists of the following modular phases:
 ```typescript
 name:str = "Gautam";
 age:int = 18;
+```
 
----
+### Interactive I/O
+```
+print("Enter your name: ");
+msg:str = input();
 
----
+print("Enter your age: ");
+age:int = to_int(input());
+```
+
+### Control Flow
+```
+if (age > 17) {
+    print(msg, ", Congratulations you are eligible to vote!\n");
+} else {
+    print(msg, ", You still need to wait for ", (18 - age), " years.\n");
+}
+```
 
 ## Built-in Functions & Operations
 
 ### Standard I/O
-- **`print(arg1, arg2, ...)`** – Variadic printing supporting mixed data types.
-- **`input()`** – Reads input from standard input into a dynamically allocated buffer.
+- ```print(arg1, arg2, ...)``` – Variadic printing supporting mixed data types.
+- ```input()``` – Reads input from standard input into a dynamically allocated buffer.
 
-### Data Conversion
-- **`to_int(string)`** – Converts ASCII string input into integer values.
+## Data Conversion
+- ```to_int(string)``` – Converts ASCII string input into integer values.
 
-### Control Flow
-- **`if` / `else`** statements
-- **`while`** loops
+## Control Flow
+- ```if / else``` statements
+- ```whil``` loops
 
----
+###  System-Level Integration
 
-## System-Level Integration
+## Assembly Macros
+- sys_read – Reads from file descriptor 0 (stdin).
+- sys_write – Writes to file descriptor 1 (stdout).
+- sys_exit – Terminates the program with status 0.
 
-### Assembly Macros
-- **`sys_read`** – Reads from file descriptor 0 (`stdin`).
-- **`sys_write`** – Writes to file descriptor 1 (`stdout`).
-- **`sys_exit`** – Terminates the program with status 0.
-
----
-
-## Backend Engine Design
-
+## Backend Design Engine
 The compiler backend integrates several optimized components:
 
-- **Bump Allocator** – Efficiently stores variable-length inputs sequentially in memory without overwrites.
-- **String-to-Integer Converter** – Implements ASCII parsing using arithmetic logic for base-10 integer generation.
-- **Variadic Call Handler** – Dynamically dispatches arguments to `builtin_print_int` or `builtin_print_str` based on AST type information.
+- Bump Allocator – Efficiently stores variable-length inputs sequentially in memory without overwrites.
+- String-to-Integer Converter – Implements ASCII parsing using arithmetic logic for base-10 integer generation.
+- Variadic Call Handler – Dynamically dispatches arguments to builtin_print_int or builtin_print_str based on AST type information.
 
----
+### Project Structure
 
-## Project Structure
+├── examples
+│   ├── main.gv
+│   └── test.gv
+├── Makefile
+├── README.md
+└── src
+    ├── as_frontend.c
+    ├── AST.c
+    ├── builtins.c
+    ├── include
+    │   ├── as_frontend.h
+    │   ├── AST.h
+    │   ├── builtins.h
+    │   ├── io.h
+    │   ├── lexer.h
+    │   ├── list.h
+    │   ├── macros.h
+    │   ├── parser.h
+    │   ├── tac.h
+    │   ├── token.h
+    │   ├── types.h
+    │   └── visitor.h
+    ├── io.c
+    ├── lexer.c
+    ├── list.c
+    ├── main.c
+    ├── parser.c
+    ├── tac.c
+    ├── token.c
+    ├── types.c
+    └── visitor.c
 
-```text
-GVR-Compiler/
-├── src/
-│   ├── lexer.c        # Tokenization of input
-│   ├── parser.c       # Grammar enforcement & AST generation
-│   ├── visitor.c      # Symbol table & semantic handling
-│   ├── as_frontend.c  # Assembly code generation
-│   └── main.c         # Entry point
-├── include/
-│   ├── token.h        # Token definitions
-│   ├── ast.h          # AST structures
-│   └── ...
-├── examples/
-│   └── test.gv        # Sample program
-├── Makefile           # Build automation
-└── README.md
+## Module Description
 
----
+| Module           | Description                    |
+|------------------|--------------------------------|
+| lexer.c          | Tokenizes input source         |
+| parser.c         | Builds AST from tokens         |
+| visitor.c        | Performs semantic analysis     |
+| as_frontend.c    | Generates assembly code        |
+| ast.c / ast.h    | Defines AST structures         |
+
+## Tools Used
+- GCC → C Compiler (Requires gcc-multilib for 32-bit output on 64-bit systems)
+- GNU Make → Build automation
+- GNU Binutils (as, ld) → Assembly and linking
+
+
+### Quick Start
+
+## 1. Build the Compiler
+```bash
+make
+```
+
+## 2. Compile a Script
+```bash
+./gvr.out examples/test.gv
+```
+
+## 3. Run the output
+```bash
+./a.out
+```
+
+### Future Enhancements
+- Support for floating-point arithmetic (float)
+- User-defined functions with parameters
+- Array support and contiguous memory structures
+- for loop syntax
+- Standard library and module system
+
+### Author
+Gautam V (Student)
+
+### Notes
+This project is intended for educational purposes and demonstrates the end-to-end pipeline of a compiler:
+
+Lexing → Parsing → AST → Code Generation → Execution
