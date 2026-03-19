@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 static int label_count = 0;
-static int current_local_offset = -4;
+static int current_local_offset = -4; // Start at -4 for the first local variable
 
 static int string_count = 0;
 char* string_data_section = NULL;
@@ -206,32 +206,43 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   
   if (ast->value->type == AST_FUNCTION)
   {
-    current_local_offset = -4; // Reset offset for the new stack frame!
+    current_local_offset = -4; // Reset offset for new functions
+    AST_T* as_val = ast->value;
 
+    // --- 1. CRITICAL FIX: REGISTER PARAMETERS FIRST! ---
+    // We MUST put parameters in the symbol table before hoisting locals.
+    if (as_val->children) {
+        for(unsigned int i = 0; i < as_val->children->size; i++)
+        {
+          AST_T* farg = (AST_T*) as_val->children->items[i];
+          
+          // Safety check: Only push if it's not already there
+          if (!var_lookup(list, farg->name)) {
+              AST_T* arg_variable = init_ast(AST_VARIABLE);
+              arg_variable->name = farg->name;
+              arg_variable->int_value = 8 + (i * 4); // POSITIVE offsets! 8, 12, 16...
+              arg_variable->data_type = farg->data_type; // Pass data type just in case
+              list_push(list, arg_variable);
+          }
+        }
+    }
+    // ---------------------------------------------------
+
+    // 2. NOW safely hoist the rest of the local variables
+    hoist_local_variables(ast->value, list);
+
+    int stack_space_needed = (-current_local_offset) - 4; // Total space for locals + return address
+
+    // 3. Generate Function Prologue
     const char* template = ".globl %s\n"
                            "%s:\n"
                            "pushl %%ebp\n"
-                           "movl %%esp, %%ebp\n";
-    s = realloc(s, (strlen(template) + (strlen(ast->name) * 2) + 1) * sizeof(char));
-    sprintf(s, template, ast->name, ast->name);
+                           "movl %%esp, %%ebp\n"
+                           "subl $%d, %%esp\n"; 
+    s = realloc(s, (strlen(template) + (strlen(ast->name) * 2) + 64) * sizeof(char));
+    sprintf(s, template, ast->name, ast->name, stack_space_needed);
 
-    AST_T* as_val = ast->value;
-    for(unsigned int i = 0; i < as_val->children->size; i++)
-    {
-      AST_T* farg = (AST_T*) as_val->children->items[i];
-      AST_T* arg_variable = init_ast(AST_VARIABLE);
-      arg_variable->name = farg->name;
-
-      // --- THE FIX IS HERE ---
-      // In x86, the first argument (index 0) is always at 8(%ebp)
-      // The second (index 1) is at 12(%ebp), etc.
-      arg_variable->int_value = 8 + (i * 4); 
-      // -----------------------
-
-
-      list_push(list, arg_variable);
-    }
-
+    // 4. Generate Function Body
     char* as_val_val = as_f(as_val->value, list);
     s = realloc(s, (strlen(s) + strlen(as_val_val) + 1) * sizeof(char));
     strcat(s, as_val_val);
@@ -240,70 +251,42 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   else 
   {
     AST_T* existing_var = var_lookup(list, ast->name);
-
-    // --- NEW: TYPE CHECKING GUARDRAILS ---
-    // 1 is our integer data type from the parser
-    if (ast->data_type == 1 && ast->value->type == AST_STRING) {
-        printf("[Type Error]: Cannot assign a string to integer variable '%s'\n", ast->name);
-        exit(1);
+    
+    // --- ADD THIS SAFETY CHECK ---
+    if (!existing_var) {
+        printf("Compiler Error: Variable '%s' was not found or hoisted!\n", ast->name);
+        exit(1); 
     }
-
-    if (existing_var) {
-        // Prevent assigning a string to an existing integer variable
-        if (existing_var->data_type == 1 && ast->value->type == AST_STRING) {
-             printf("[Type Error]: Variable '%s' is an integer, cannot reassign to string.\n", ast->name);
-             exit(1);
-        }
-    }
-    // ---------------------------------------
+    // -----------------------------
 
     char* val_s = as_f(ast->value, list);
 
-    if (existing_var) {
-        // Reassign existing variable: overwrite the memory directly
-        const char* template = "%s"
-                               "movl %%eax, %d(%%ebp)\n";
-        s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
-        sprintf(s, template, val_s, existing_var->int_value);
-    } else {
-        // First time declaring variable: Push to stack
-        const char* template = "%s"
-                               "pushl %%eax\n";
-        s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
-        sprintf(s, template, val_s);
+    const char* template = "%s"
+                           "movl %%eax, %d(%%ebp)\n";
+                           
+    s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
+    sprintf(s, template, val_s, existing_var->int_value);
 
-        AST_T* local_var = init_ast(AST_VARIABLE);
-        local_var->name = ast->name;
-        local_var->int_value = current_local_offset;
-        
-        // --- NEW: SAVE THE DATA TYPE ---
-        local_var->data_type = ast->data_type; 
-        // -------------------------------
-
-        current_local_offset -= 4; // Move offset down for the next variable
-        
-        list_push(list, local_var);
-    }
     free(val_s);
   }
-
   return s;
 }
 
 char* as_f_variable(AST_T* ast, list_T* list) 
 {
-  char* s = calloc(1, sizeof(char));
   AST_T* var = var_lookup(list, ast->name);
 
-  if(!var)
-  {
+  if(!var) {
     printf("[AS Frontend]: `%s` is not defined.\n", ast->name);
     exit(1);
   }
 
-  // Changed %esp to %ebp so variable lookups are rock solid
-  const char* template = "movl %d(%%ebp), %%eax\n"; 
-  s = realloc(s, (strlen(template) + 32) * sizeof(char));
+  // CRITICAL: Ensure we use the parentheses () around %ebp
+  // This tells the CPU: "Go to this memory address and get the VALUE."
+  const char* template = "    movl %d(%%ebp), %%eax\n"; 
+  char* s = calloc(strlen(template) + 32, sizeof(char));
+  
+  // var->int_value should be -4, -8, etc.
   sprintf(s, template, var->int_value);
 
   return s;
@@ -589,20 +572,45 @@ char* as_f_root(AST_T* ast, list_T* list)
 
 char* as_f_access(AST_T* ast, list_T* list)
 {
-  AST_T* left = var_lookup(list, ast->name);
-  char* left_as = as_f(left, list);
-  AST_T* first_arg = (AST_T*) (ast->value && ast->value->children->size) ? ast->value->children->items[0] : (void*) 0;
-  
-  // Left evaluates into EAX, so we read the offset relative to EAX
-  const char* template = "%s"
-                         "movl %d(%%eax), %%eax\n";
-
-  char* s = calloc(strlen(template) + strlen(left_as) + 128, sizeof(char));
-  sprintf(s, template, left_as, (first_arg ? first_arg->int_value : 0) * 4);
- 
-  free(left_as);
-  return s;
+  // For now, redirect access to variable lookup to get the raw value
+  return as_f_variable(ast, list);
 }
+
+//I am using this function to find all local variables and assign them stack offsets before codegen. This way, when we encounter an assignment to a new variable anywhere in the function, we can assign it a unique stack offset and store that in the AST node. Then, when we access that variable later, we can generate the correct assembly to read/write from that stack offset.
+void hoist_local_variables(AST_T* ast, list_T* list) {
+    if (!ast) return;
+
+    // 1. If we find an assignment, register the variable!
+    if (ast->type == AST_ASSIGNMENT && ast->name) {
+        if (!var_lookup(list, ast->name)) {
+            AST_T* local_var = init_ast(AST_VARIABLE);
+            local_var->name = ast->name;
+            local_var->int_value = current_local_offset; 
+            current_local_offset -= 4; 
+            
+            // --- CRITICAL FIX: Transfer the data type! ---
+            local_var->data_type = ast->data_type; 
+            // ---------------------------------------------
+            
+            list_push(list, local_var);
+        }
+    }
+
+    // 2. Traverse down all possible AST branches to find hidden assignments
+    if (ast->value) hoist_local_variables(ast->value, list);
+    
+    // (If your AST_T struct uses left/right for binary trees or loop conditions)
+    if (ast->left) hoist_local_variables(ast->left, list);
+    if (ast->right) hoist_local_variables(ast->right, list);
+
+    // 3. Traverse down into 'children' (Block statements)
+    if (ast->children) {
+        for (unsigned int i = 0; i < ast->children->size; i++) {
+            hoist_local_variables((AST_T*)ast->children->items[i], list);
+        }
+    }
+}
+
 
 char* as_f(AST_T* ast, list_T* list) {    
   if (!ast) return calloc(1, sizeof(char));

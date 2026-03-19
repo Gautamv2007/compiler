@@ -1,16 +1,8 @@
 main = () -> {
-  print("Enter your name: ");
-  msg:str = input();
+  print("Enter a number: ");
+  x:int = to_int(input());
 
-  print("Enter you age: ");
-  age:int = to_int(input());
-
-  if (age > 17){
-    print(msg, ", Congratulations you are eligible to vote\n");
-  }
-  else {
-    print("You still need to wait for ", (18-age), "years\n");
-  }
-
+  rem:int = x % 5;
+  print(rem, "\n");
   return 0;
 }

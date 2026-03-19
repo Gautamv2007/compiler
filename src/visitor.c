@@ -96,10 +96,11 @@ AST_T* visitor_visit_assignment(visitor_T* visitor, AST_T* node, list_T* list)
 {
   AST_T* new_var = init_ast(AST_ASSIGNMENT);
   new_var->name = node->name;
-  
-  // --- ADD THIS LINE ---
-  new_var->data_type = node->data_type; 
-  // ---------------------
+  new_var->data_type = node->data_type;
+
+  // Assign a unique stack offset!
+  visitor->stack_count += 4; 
+  new_var->stack_offset = visitor->stack_count; // Store this in the AST node
 
   new_var->value = visitor_visit(visitor, node->value, list);
   list_push(list, new_var);

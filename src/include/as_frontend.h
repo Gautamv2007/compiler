@@ -20,6 +20,7 @@ char* as_f_binop(AST_T* ast, list_T* list); // New: Arithmetic handler
 char* as_f_while(AST_T* ast, list_T* list); // New: Loop handler
 char* as_f_if(AST_T* ast, list_T* list);    // New: Conditional handler
 char* as_f_access(AST_T* ast, list_T* list);
+void hoist_local_variables(AST_T* ast, list_T* list); // New: Pre-scan for local variable declarations and stack offset assignment
 char* as_f_string(AST_T* ast, list_T* list); // New: String literal handler
 
 #endif

@@ -28,6 +28,8 @@ typedef struct AST_STRUCT
   char* name;
   char* string_value;
   char* op;         // New: To store the operator (e.g., "+", "<")
+
+  int stack_offset;
   
   struct AST_STRUCT* left;  // New: For Binary Ops (left side)
   struct AST_STRUCT* right; // New: For Binary Ops (right side)

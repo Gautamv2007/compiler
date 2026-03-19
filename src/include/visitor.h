@@ -6,6 +6,7 @@
 typedef struct VISITOR_STRUCT
 {
   AST_T* object; // Root compound for scope/builtins
+  int stack_count;
 } visitor_T;
 
 visitor_T* init_visitor();

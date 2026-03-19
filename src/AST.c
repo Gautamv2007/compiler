@@ -18,6 +18,7 @@ AST_T* init_ast(int type)
     ast->right = NULL;
     ast->int_value = 0;
     ast->data_type = 0;
+    ast->stack_offset = 0;
     ast->fptr = NULL;
 
     return ast;
