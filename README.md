@@ -1,77 +1,67 @@
-GVR Compiler
-A custom, statically-typed programming language built entirely from scratch in C.
+# GVR Compiler
 
-The GVR Compiler features a custom lexer, parser, and Abstract Syntax Tree (AST) that compiles high-level, Python-inspired syntax directly down to raw 32-bit x86 Linux Assembly. No virtual machines, no interpreters—just pure, bare-metal machine code.
+> A custom-designed, statically-typed programming language implemented in C, featuring a modular frontend pipeline and direct compilation to 32-bit x86 Linux Assembly.
 
-Key Features
-Compiled to x86 Assembly: Your code is translated into efficient, standalone Linux executables.
+---
 
-Static Typing: Enforced data types (int, str) for safer code and precise memory management.
+## Overview
 
-Smart Print Function: A Python-style, variadic print() that automatically detects and handles multiple data types in a single function call.
+This project demonstrates the design of a complete compiler from scratch, taking high-level, Python-inspired syntax and translating it down to bare-metal machine code without the use of virtual machines or intermediate interpreters.
 
-Dynamic Bump Allocator: A custom built-in memory allocator that safely stores user input in RAM without overwriting previous data.
+The compiler supports:
+- Strict static typing
+- Dynamic memory allocation for strings
+- A Python-style variadic `print` function
+- Seamless interactive system I/O
 
-Interactive Input: Seamless string and integer reading using input() and to_int().
+The complete architecture was developed in C and utilizes the GNU Toolchain for assembling and linking.
 
-Control Flow: Fully functional if / else statements and while loops.
+---
 
-Native System Calls: Directly interfaces with the Linux Kernel (int 0x80) for highly optimized I/O operations.
+## Highlights
 
-Syntax & Example
-GVR blends the strict typing of TypeScript with the readable, user-friendly built-in functions of Python.
+✔ Compiled natively to x86 Assembly  
+✔ Static typing enforcement (`int`, `str`)  
+✔ Dynamic Bump Allocator for RAM management  
+✔ Python-style variadic `print()`  
+✔ Interactive `input()` and type-casting `to_int()`  
+✔ Modular Lexer, Parser, and AST pipeline  
+✔ Native Linux Kernel system calls (`int 0x80`)  
 
-Here is a working example of a GVR program (example.gv):
+---
 
-TypeScript
-main = () -> {
-  print("Enter your name: ");
-  msg:str = input();
+## System Specifications
 
-  print("Enter your age: ");
-  age:int = to_int(input());
+| Component            | Configuration                     |
+|----------------------|-----------------------------------|
+| Host Language        | C                                 |
+| Target Architecture  | 32-bit x86 Linux                  |
+| Target Assembly      | AT&T Syntax                       |
+| Supported Data Types | Integer (`int`), String (`str`)   |
+| Memory Management    | Custom Bump Allocator (1KB Buffer)|
+| I/O Interface        | Direct Linux Syscalls             |
+| Program Flow         | Sequential, Branches, Loops       |
 
-  if (age > 17) {
-    print(msg, ", Congratulations you are eligible to vote!\n");
-  }
-  else {
-    print(msg, ", You still need to wait for ", (18 - age), " years.\n");
-  }
+---
 
-  return 0;
-}
-Architecture Under the Hood
-Lexical Analysis: Breaks raw text down into recognizable tokens (Identifiers, Keywords, Operators).
+## Architecture Blocks
 
-Parsing: Constructs an Abstract Syntax Tree (AST) enforcing the grammar rules of the language.
+*(Note: You can insert a block diagram image of your Compiler Pipeline here once you upload one to GitHub!)*
 
-Semantic Analysis (Visitor): Traverses the AST, tracking variable scopes, calculating memory offsets, and validating types.
+The compiler consists of the following modular phases:
 
-Code Generation: Generates raw AT&T syntax x86 assembly, dynamically linking custom built-in assembly macros for memory allocation, string conversion, and system I/O.
+- **Lexical Analyzer (Lexer)** – Tokenizes raw source code  
+- **Parser** – Validates grammar and constructs the Abstract Syntax Tree (AST)  
+- **Semantic Analyzer (Visitor)** – Traverses the AST, tracking variable scopes and types  
+- **Code Generator** – Translates AST nodes into x86 assembly instructions  
+- **Assembler (`as`)** – Converts assembly into object code  
+- **Linker (`ld`)** – Stitches object code into an ELF executable  
 
-Assembling & Linking: Calls GNU as and ld to stitch the assembly into an ELF executable.
+---
 
-How to Build & Run
-Prerequisites
-A Linux environment (or WSL on Windows).
+## Syntax & Formats
 
-gcc, make, and binutils (as, ld) installed.
-
-Note: Requires a 32-bit compilation environment (e.g., gcc-multilib on 64-bit systems).
-
-1. Build the Compiler
-Clone the repository and run make to compile the C source code into the compiler executable:
-
-Bash
-make
-2. Compile a Script
-Pass a .gv file to the newly built compiler. This will generate the assembly code and produce a final executable (defaulting to a.out):
-
-Bash
-./gvr.out examples/test.gv
-3. Run Your Program
-Execute the compiled binary:
-
-Bash
-./a.out
-Built with C, Assembly, and a lot of caffeine. ☕
+### Variable Declaration & Assignment
+```typescript
+name:str = "Gautam";
+age:int = 18;
