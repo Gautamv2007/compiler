@@ -3,6 +3,7 @@ check = (x:int) -> {
   flag:int = 0;
   while(i < x){
     rem:int = x%i;
+
     if (rem == 0){
       flag = 1;
     }
@@ -12,8 +13,7 @@ check = (x:int) -> {
 }
 
 main = () -> {
-  print("Enter a number: ");
-  x:int = to_int(input());
+  x:int = 9;
 
   out:int = check(x);
 
