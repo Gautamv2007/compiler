@@ -365,6 +365,62 @@ const char* asm_builtins =
 "    int $0x80\n"
 "    addl $16, %esp\n"
 "    popl %ebp\n"
+"    ret\n"
+// --- NEW: Dynamic Bump Allocator for Input ---
+".section .bss\n"
+".lcomm global_input_buffer, 1024\n"
+".section .data\n"
+"current_input_ptr: .long global_input_buffer\n"
+".section .text\n"
+
+"builtin_input:\n"
+"    pushl %ebp\n"
+"    movl %esp, %ebp\n"
+"    movl $3, %eax\n"                     // sys_read
+"    movl $0, %ebx\n"                     // stdin
+"    movl current_input_ptr, %ecx\n"      
+"    movl $255, %edx\n"                   
+"    int $0x80\n"                         // Read input. EAX holds the number of bytes read.
+// --- Strip Newline and Bump Allocator ---
+"    movl current_input_ptr, %ebx\n"      // Save the start address in EBX
+"    movl %ebx, %ecx\n"                   
+"    addl %eax, %ecx\n"                   // Move ECX to the very end of what was typed
+"    decl %ecx\n"                         // Step back one character (to look at the last thing typed)
+"    cmpb $10, (%ecx)\n"                  // Is it a newline (\n)?
+"    jne .L_no_newline\n"                 // If not, jump down
+"    movb $0, (%ecx)\n"                   // YES! Overwrite the \n with a null terminator (\0)
+"    incl %ecx\n"                         // Move forward 1 byte for the next allocation
+"    jmp .L_save_ptr\n"
+".L_no_newline:\n"
+"    incl %ecx\n"                         // Step forward past the last character
+"    movb $0, (%ecx)\n"                   // Add a null terminator
+"    incl %ecx\n"                         // Move forward 1 byte for the next allocation
+".L_save_ptr:\n"
+"    movl %ecx, current_input_ptr\n"      // Save the new free-space pointer!
+"    movl %ebx, %eax\n"                   // Return the original string address in EAX
+"    popl %ebp\n"
+"    ret\n"
+
+// --- Convert String to Int ---
+"builtin_int:\n"
+"    pushl %ebp\n"
+"    movl %esp, %ebp\n"
+"    movl 8(%ebp), %esi\n"                // Grab string address
+"    xorl %eax, %eax\n"                   
+"    xorl %ebx, %ebx\n"                   
+".L_int_loop:\n"
+"    movb (%esi), %bl\n"                  
+"    cmpb $10, %bl\n"                     // Stop at newline
+"    je .L_int_done\n"
+"    cmpb $0, %bl\n"                      // Stop at null terminator
+"    je .L_int_done\n"
+"    subb $48, %bl\n"                     
+"    imull $10, %eax\n"                   
+"    addl %ebx, %eax\n"                   
+"    incl %esi\n"                         
+"    jmp .L_int_loop\n"
+".L_int_done:\n"
+"    popl %ebp\n"
 "    ret\n";
 
 char* as_f_call(AST_T* ast, list_T* list)
@@ -433,6 +489,29 @@ char* as_f_call(AST_T* ast, list_T* list)
             free(val_s);
         }
     }
+  }
+
+  //for scanning input
+  // Handle Python-style input()
+  else if (strcmp(ast->name, "input") == 0)
+  {
+    const char* template = "call builtin_input\n";
+    s = realloc(s, strlen(s) + strlen(template) + 1);
+    strcat(s, template);
+  }
+  // Handle Python-style int(string)
+  else if (strcmp(ast->name, "to_int") == 0)
+  {
+    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
+    char* val_s = as_f(first_arg, list);
+    const char* template = "%s" 
+                           "pushl %%eax\n"    
+                           "call builtin_int\n"
+                           "addl $4, %%esp\n"; 
+    
+    s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
+    sprintf(s, template, val_s);
+    free(val_s);
   }
   // --- NEW: Handle Custom Functions ---
   else 
