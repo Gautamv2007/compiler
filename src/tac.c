@@ -35,7 +35,7 @@ static char* sh(const char* cmd)
 
 
 
-void tac_compile(char* src)
+void gv_compile(char* src)
 {
   lexer_T* lexer = init_lexer(src);
   parser_T* parser = init_parser(lexer);
@@ -52,9 +52,9 @@ void tac_compile(char* src)
   sh("ld a.o -o a.out -m elf_i386"); //This "-m elf_i386"is also required for 32 bit assembler
 }
 
-void tac_compile_file(const char* filename)
+void gv_compile_file(const char* filename)
 {
   char* src = tac_read_file(filename);
-  tac_compile(src);
+  gv_compile(src);
   free(src);
 }

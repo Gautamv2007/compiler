@@ -1,4 +1,4 @@
-exec = tac.out
+exec = gvr.out
 sources = $(wildcard src/*.c)
 objects = $(sources:.c=.o)
 # Added -Isrc/include so gcc knows where to look for headers

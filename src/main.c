@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    tac_compile_file(argv[1]);
+    gv_compile_file(argv[1]);
 
     return 0;
 }

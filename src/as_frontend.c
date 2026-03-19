@@ -339,16 +339,15 @@ const char* asm_builtins =
 "    int $0x80\n"
 "    popl %ebp\n"
 "    ret\n"
-// --- NEW: Print Integer ---
+// --- NEW: Print Integer (No Newline) ---
 "builtin_print_int:\n"
 "    pushl %ebp\n"
 "    movl %esp, %ebp\n"
 "    subl $16, %esp\n"            
 "    movl 8(%ebp), %eax\n"        
 "    movl $10, %esi\n"
-"    leal 15(%esp), %edi\n"       
-"    movb $10, (%edi)\n"          
-"    decl %edi\n"
+"    leal 16(%esp), %edi\n"       // Start at the very end of the 16-byte buffer
+"    decl %edi\n"                 // Step back 1 byte (We no longer write '10' here!)
 ".L_convert_loop:\n"
 "    xorl %edx, %edx\n"
 "    divl %esi\n"                 
@@ -362,7 +361,7 @@ const char* asm_builtins =
 "    movl $1, %ebx\n"             
 "    movl %edi, %ecx\n"           
 "    leal 16(%esp), %edx\n"       
-"    subl %edi, %edx\n"
+"    subl %edi, %edx\n"           // Calculate the exact length of the digits
 "    int $0x80\n"
 "    addl $16, %esp\n"
 "    popl %ebp\n"
@@ -393,32 +392,47 @@ char* as_f_call(AST_T* ast, list_T* list)
     sprintf(s, template, val_s);
     free(val_s);
   }
-  // Handle print
+  // Handle Smart Print (Python style!)
   else if (strcmp(ast->name, "print") == 0)
   {
-    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
-    char* val_s = as_f(first_arg, list);
-    const char* template = "%s" 
-                           "pushl %%eax\n"    
-                           "call builtin_print_int\n"
-                           "addl $4, %%esp\n"; 
-    s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
-    sprintf(s, template, val_s);
-    free(val_s);
-  }
+    if (args) {
+        // Loop through every argument passed to print(arg1, arg2, arg3)
+        for (int i = 0; i < args->size; i++) {
+            AST_T* arg = (AST_T*) args->items[i];
+            char* val_s = as_f(arg, list);
+            
+            // 1. Detect the data type!
+            int is_string = 0; 
+            
+            if (arg->type == AST_STRING) {
+                is_string = 1; // It's a literal "string"
+            } else if (arg->type == AST_VARIABLE) {
+                AST_T* var = var_lookup(list, arg->name);
+                // Remember we set data_type = 2 for strings in parser.c!
+                if (var && var->data_type == 2) { 
+                    is_string = 1; 
+                }
+            }
+            
+            // 2. Choose the right builtin function
+            const char* func_to_call = is_string ? "builtin_print_str" : "builtin_print_int";
 
-  else if (strcmp(ast->name, "print_str") == 0)
-  {
-    AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
-    char* val_s = as_f(first_arg, list);
-    const char* template = "%s" 
-                           "pushl %%eax\n"    
-                           "call builtin_print_str\n"
-                           "addl $4, %%esp\n"; 
-    
-    s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
-    sprintf(s, template, val_s);
-    free(val_s);
+            // 3. Generate the assembly for this specific argument
+            const char* template = "%s" 
+                                   "pushl %%eax\n"    
+                                   "call %s\n"
+                                   "addl $4, %%esp\n"; 
+            
+            s = realloc(s, (strlen(s) + strlen(template) + strlen(val_s) + 64) * sizeof(char));
+            char* temp = calloc(strlen(template) + strlen(val_s) + 64, sizeof(char));
+            
+            sprintf(temp, template, val_s, func_to_call);
+            strcat(s, temp);
+            
+            free(temp);
+            free(val_s);
+        }
+    }
   }
   // --- NEW: Handle Custom Functions ---
   else 

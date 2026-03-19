@@ -1,0 +1,6 @@
+main = () -> {
+  x:int = 10;
+  msg:str = " Hello ";
+  print(42, msg, x, "\n");
+  return 0;
+}
