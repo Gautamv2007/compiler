@@ -65,3 +65,119 @@ The compiler consists of the following modular phases:
 ```typescript
 name:str = "Gautam";
 age:int = 18;
+
+
+---
+
+## 🛠️ Built-in Functions & Operations
+
+### Standard I/O
+- **`print(arg1, arg2, ...)`** – Variadic printing supporting mixed data types.
+- **`input()`** – Reads input from standard input into a dynamically allocated buffer.
+
+### Data Conversion
+- **`to_int(string)`** – Converts ASCII string input into integer values.
+
+### Control Flow
+- **`if` / `else`** statements
+- **`while`** loops
+
+---
+
+## ⚙️ System-Level Integration
+
+### Assembly Macros
+- **`sys_read`** – Reads from file descriptor 0 (`stdin`).
+- **`sys_write`** – Writes to file descriptor 1 (`stdout`).
+- **`sys_exit`** – Terminates the program with status 0.
+
+---
+
+## 🧠 Backend Engine Design
+
+The compiler backend integrates several optimized components:
+
+- **Bump Allocator** – Efficiently stores variable-length inputs sequentially in memory without overwrites.
+- **String-to-Integer Converter** – Implements ASCII parsing using arithmetic logic for base-10 integer generation.
+- **Variadic Call Handler** – Dynamically dispatches arguments to `builtin_print_int` or `builtin_print_str` based on AST type information.
+
+---
+
+## 📂 Project Structure
+
+```text
+GVR-Compiler/
+├── src/
+│   ├── lexer.c        # Tokenization of input
+│   ├── parser.c       # Grammar enforcement & AST generation
+│   ├── visitor.c      # Symbol table & semantic handling
+│   ├── as_frontend.c  # Assembly code generation
+│   └── main.c         # Entry point
+├── include/
+│   ├── token.h        # Token definitions
+│   ├── ast.h          # AST structures
+│   └── ...
+├── examples/
+│   └── test.gv        # Sample program
+├── Makefile           # Build automation
+└── README.md
+
+
+Markdown
+## Module Description
+
+| Module | Description |
+|--------|-------------|
+| **`lexer.c`** | Breaks the input stream into tokens. |
+| **`parser.c`** | Builds the AST based on language grammar. |
+| **`visitor.c`** | Handles symbol tables, memory offsets, and types. |
+| **`as_frontend.c`** | Generates x86 assembly and built-in macros. |
+| **`ast.c` / `ast.h`** | Defines AST node structures. |
+
+---
+
+## Tools Used
+
+- **GCC** → C Compiler *(Requires `gcc-multilib` for 32-bit output on 64-bit systems)*
+- **GNU Make** → Build automation
+- **GNU Binutils (`as`, `ld`)** → Assembly and linking
+
+---
+
+## 🚀 Quick Start
+
+### 1. Build the Compiler
+```bash
+make
+## 2. Compile a Script
+```Bash
+./gvr.out examples/test.gv
+## 3. Run the Output
+```Bash
+./a.out
+### Future Enhancements
+Support for floating-point arithmetic (float)
+
+User-defined functions with parameters
+
+Array support and contiguous memory structures
+
+for loop syntax
+
+Standard library and module system
+
+## Author
+Gautam V (Student)
+
+Interests:
+
+Compiler Construction & Language Design
+
+Systems Programming
+
+Low-Level Architecture
+
+##Notes
+This project is intended for educational purposes and demonstrates the end-to-end pipeline of a compiler:
+
+Lexing → Parsing → AST → Code Generation → Execution
