@@ -116,8 +116,22 @@ token_T* lexer_next_token(lexer_T* lexer)
       case '}': return lexer_advance_current(lexer, TOKEN_RBRACE);
       case '[': return lexer_advance_current(lexer, TOKEN_LBRACKET);
       case ']': return lexer_advance_current(lexer, TOKEN_RBRACKET);
-      case '+': return lexer_advance_current(lexer, TOKEN_PLUS);
+      case '+': {
+        // Check for += operator
+        if (lexer_peek(lexer, 1) == '=') {
+          // printf("[DEBUG Lexer]: Successfully found '+=' token!\n");
+
+          lexer_advance(lexer); 
+          return lexer_advance_with(lexer, init_token("+=", TOKEN_PLUS_EQUALS));
+        }
+        return lexer_advance_current(lexer, TOKEN_PLUS);
+      }
       case '-': {
+        // Check for -= operator
+        if (lexer_peek(lexer, 1) == '=') {
+          lexer_advance(lexer);
+          return lexer_advance_with(lexer, init_token("-=", TOKEN_MINUS_EQUALS));
+        }
         // Check if the next character is '>'
           if (lexer_peek(lexer, 1) == '>') {
               lexer_advance(lexer); 
@@ -126,11 +140,44 @@ token_T* lexer_next_token(lexer_T* lexer)
           // Otherwise, it's just a minus sign for math
           return lexer_advance_current(lexer, TOKEN_MINUS);
       }
-      case '*': return lexer_advance_current(lexer, TOKEN_MUL);
-      case '/': return lexer_advance_current(lexer, TOKEN_DIV);
-      case '%': return lexer_advance_current(lexer, TOKEN_MOD);
-      case '<': return lexer_advance_current(lexer, TOKEN_LT);
-      case '>': return lexer_advance_current(lexer, TOKEN_GT);
+      case '*': {
+        // Check for *= operator
+          if (lexer_peek(lexer, 1) == '=') {
+            lexer_advance(lexer); 
+            return lexer_advance_with(lexer, init_token("*=", TOKEN_MUL_EQUALS));
+          }
+          return lexer_advance_current(lexer, TOKEN_MUL);
+      }
+      case '/': {
+        // Check for /= operator
+          if (lexer_peek(lexer, 1) == '=') {
+            lexer_advance(lexer); 
+            return lexer_advance_with(lexer, init_token("/=", TOKEN_DIV_EQUALS));
+          }
+          return lexer_advance_current(lexer, TOKEN_DIV);
+      }
+      case '%': {
+        // Check for %= operator
+          if (lexer_peek(lexer, 1) == '=') {
+            lexer_advance(lexer); 
+            return lexer_advance_with(lexer, init_token("%=", TOKEN_MOD_EQUALS));
+          }
+          return lexer_advance_current(lexer, TOKEN_MOD);
+      }
+      case '<': {
+          if (lexer_peek(lexer, 1) == '=') {
+              lexer_advance(lexer);
+              return lexer_advance_with(lexer, init_token("<=", TOKEN_LTE));
+          }
+          return lexer_advance_current(lexer, TOKEN_LT);
+      }
+      case '>': {
+          if (lexer_peek(lexer, 1) == '=') {
+              lexer_advance(lexer);
+              return lexer_advance_with(lexer, init_token(">=", TOKEN_GTE));
+          }
+          return lexer_advance_current(lexer, TOKEN_GT);
+      }
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
       case ';': return lexer_advance_current(lexer, TOKEN_SEMI);

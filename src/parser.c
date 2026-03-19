@@ -120,14 +120,20 @@ AST_T* parser_parse_additive(parser_T* parser) {
 // 4. Comparison: Handles <, >, ==
 AST_T* parser_parse_comparison(parser_T* parser) {
     AST_T* left = parser_parse_additive(parser);
-
-    while (parser->token->type == TOKEN_LT || parser->token->type == TOKEN_GT || parser->token->type == TOKEN_EQUALS_EQUALS) {
+    while (parser->token->type == TOKEN_LT || 
+           parser->token->type == TOKEN_GT || 
+           parser->token->type == TOKEN_EQUALS_EQUALS ||
+           parser->token->type == TOKEN_LTE || 
+           parser->token->type == TOKEN_GTE) 
+    {
         token_T* op_token = parser->token;
         parser_eat(parser, op_token->type);
 
         AST_T* binop = init_ast(AST_BINOP);
         binop->left = left;
-        binop->op = op_token->value;
+        
+        binop->op = op_token->value; 
+        
         binop->right = parser_parse_additive(parser);
         left = binop;
     }
@@ -272,17 +278,38 @@ AST_T* parser_parse_id(parser_T* parser)
   }
 
   // Assignment: x:int = 5  OR  x = 5
-  if(parser->token->type == TOKEN_EQUALS)
+  // printf("[DEBUG Parser]: Checking assignment for '%s'. Token Type is: %d\n", value, parser->token->type);
+  if(parser->token->type == TOKEN_EQUALS || 
+    parser->token->type == TOKEN_PLUS_EQUALS ||
+    parser->token->type == TOKEN_MINUS_EQUALS ||
+    parser->token->type == TOKEN_MUL_EQUALS ||
+    parser->token->type == TOKEN_DIV_EQUALS ||
+    parser->token->type == TOKEN_MOD_EQUALS)
   {
-    parser_eat(parser, TOKEN_EQUALS);
+    int op_type = parser->token->type; // Remember which operator it is for the AST node
+    // token_T* op_token = parser->token;
+    
+    // 2. Eat the token dynamically so it doesn't crash
+    parser_eat(parser, op_type);
+    
     AST_T* ast = init_ast(AST_ASSIGNMENT);
     ast->name = value;
     ast->data_type = parsed_data_type; 
+    
+    
+    if (op_type == TOKEN_EQUALS)             ast->int_value = 1;
+    else if (op_type == TOKEN_PLUS_EQUALS)   ast->int_value = 2;
+    else if (op_type == TOKEN_MINUS_EQUALS)  ast->int_value = 3;
+    else if (op_type == TOKEN_MUL_EQUALS)    ast->int_value = 4;
+    else if (op_type == TOKEN_DIV_EQUALS)    ast->int_value = 5;
+    else if (op_type == TOKEN_MOD_EQUALS)    ast->int_value = 6;
+
+
     ast->value = parser_parse_expr(parser); 
 
     int assigned_type = get_expression_type(ast->value);
 
-    // --- NEW: Check if the variable ALREADY exists in our memory ---
+    // --- Check if the variable ALREADY exists in our memory ---
     int existing_type = 0;
     for (int i = 0; i < sym_count; i++) {
         if (strcmp(sym_names[i], ast->name) == 0) {
@@ -327,15 +354,13 @@ AST_T* parser_parse_id(parser_T* parser)
         } 
         else if (assigned_type != 0) {
             // BONUS: TYPE INFERENCE! 
-            // If they just wrote `x = 5;` without `:int`, we can automatically guess the type!
             sym_names[sym_count] = ast->name;
             sym_types[sym_count] = assigned_type;
             sym_count++;
-            ast->data_type = assigned_type; // Update the AST node so the code generator knows
+            ast->data_type = assigned_type; 
         }
     }
-    // ---------------------------------------------------------------
-
+    // printf("[DEBUG Parser]: Address: %p | '%s' Opcode is: %d\n", (void*)ast, ast->name, ast->int_value);
     return ast;
   }
 

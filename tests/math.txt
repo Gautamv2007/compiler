@@ -3,5 +3,16 @@ main = () -> {
   print((20-4)/4, "\n");
   print(17%5, "\n");
   print(5-10, "\n");
+  x:int = 10;
+  x += 10;
+  print(x, "\n");
+  x -= 10;
+  print(x, "\n");
+  x *= 5;
+  print(x, "\n");
+  x /= 2;
+  print(x, "\n");
+  x %= 5;
+  print(x, "\n");
   return 0;
 }

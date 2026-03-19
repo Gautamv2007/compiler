@@ -64,6 +64,7 @@ AST_T* visitor_visit_binop(visitor_T* visitor, AST_T* node, list_T* list)
 {
   AST_T* binop = init_ast(AST_BINOP);
   binop->op = node->op;
+  binop->int_value = node->int_value; // In case we stored the operator code here during parsing
   binop->left = visitor_visit(visitor, node->left, list);
   binop->right = visitor_visit(visitor, node->right, list);
   return binop;
@@ -97,6 +98,8 @@ AST_T* visitor_visit_assignment(visitor_T* visitor, AST_T* node, list_T* list)
   AST_T* new_var = init_ast(AST_ASSIGNMENT);
   new_var->name = node->name;
   new_var->data_type = node->data_type;
+
+  new_var->int_value = node->int_value;
 
   // Assign a unique stack offset!
   visitor->stack_count += 4; 
