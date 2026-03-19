@@ -1,8 +1,11 @@
 main = () -> {
-  x:int = 10;
-  y:int = 20;
+  x:int = to_int(input());
+  y:int = to_int(input());
 
-  z:int = 30;
-  k:int = x+y-z;
-  print(k);
+  name:string = input_line();
+
+  print("Number: ", x, " and ", y, "\n");
+  print("Name: ", name, "\n");
+
+  return 0;
 }

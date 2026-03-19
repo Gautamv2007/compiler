@@ -1,8 +1,6 @@
 main = () -> {
-  x:int = 10;
-  y:int = 20;
-
-  z:int = 30;
-  k:int = x+y-z;
-  print(k);
+  print(10 + 5 * 2, "\n");
+  print((20-4)/4, "\n");
+  print(17%5, "\n");
+  return 0;
 }

@@ -196,21 +196,22 @@ AST_T* parser_parse_id(parser_T* parser)
   int parsed_data_type = 0; // 0 means "Unknown" or "No type specified"
 
   // NEW: Check for the colon to capture the data type (e.g., :int)
+  // NEW: Check for the colon to capture the data type (e.g., :int)
   if (parser->token->type == TOKEN_COLON)
   {
       parser_eat(parser, TOKEN_COLON);
       
-      // Expect the 'int' keyword we added to the lexer
-      if (parser->token->type == TOKEN_KW_INT) {
-          parsed_data_type = 1; // 1 = Integer (You can use a macro here if you prefer)
-          parser_eat(parser, TOKEN_KW_INT);
+      // Check the actual string value to be completely safe from Lexer quirks
+      if (strcmp(parser->token->value, "int") == 0) {
+          parsed_data_type = 1; // 1 = Integer 
+          parser_eat(parser, parser->token->type); // Eat the type token safely
       }
-      else if (parser->token->type == TOKEN_KW_STR) { // <--- NEW BLOCK
-          parsed_data_type = 2; // 2 = String (Use a new ID for strings)
-          parser_eat(parser, TOKEN_KW_STR);
+      else if (strcmp(parser->token->value, "string") == 0) { 
+          parsed_data_type = 2; // 2 = String 
+          parser_eat(parser, parser->token->type); 
       }
       else {
-          printf("[Parser Error]: Expected a valid data type like 'int' after ':', but got '%s'\n", parser->token->value);
+          printf("[Parser Error]: Expected a valid data type like 'int' or 'string' after ':', but got '%s'\n", parser->token->value);
           exit(1);
       }
   }

@@ -1,0 +1,8 @@
+main = () -> {
+    i:int = 1;
+    while(i < 6){
+        print(i, "\n");
+        i = i + 1;
+    }
+    return 0;
+}

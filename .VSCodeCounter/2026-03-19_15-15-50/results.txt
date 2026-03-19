@@ -1,0 +1,51 @@
+Date : 2026-03-19 15:15:50
+Directory : /home/gautam/new_compiler/compiler/src
+Total : 24 files,  1453 codes, 125 comments, 331 blanks, all 1909 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C        |         12 |      1,252 |        113 |        270 |      1,635 |
+| C++      |         12 |        201 |         12 |         61 |        274 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                         | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                            |         24 |      1,453 |        125 |        331 |      1,909 |
+| . (Files)                                                    |         12 |      1,252 |        113 |        270 |      1,635 |
+| include                                                      |         12 |        201 |         12 |         61 |        274 |
++--------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                     | language | code       | comment    | blank      | total      |
++--------------------------------------------------------------+----------+------------+------------+------------+------------+
+| /home/gautam/new_compiler/compiler/src/AST.c                 | C        |         19 |          2 |          4 |         25 |
+| /home/gautam/new_compiler/compiler/src/as_frontend.c         | C        |        484 |         52 |         97 |        633 |
+| /home/gautam/new_compiler/compiler/src/builtins.c            | C        |         37 |          6 |          9 |         52 |
+| /home/gautam/new_compiler/compiler/src/include/AST.h         | C++      |         37 |          1 |          8 |         46 |
+| /home/gautam/new_compiler/compiler/src/include/as_frontend.h | C++      |         18 |          3 |          5 |         26 |
+| /home/gautam/new_compiler/compiler/src/include/builtins.h    | C++      |          9 |          0 |          2 |         11 |
+| /home/gautam/new_compiler/compiler/src/include/io.h          | C++      |          5 |          6 |          3 |         14 |
+| /home/gautam/new_compiler/compiler/src/include/lexer.h       | C++      |         21 |          0 |         12 |         33 |
+| /home/gautam/new_compiler/compiler/src/include/list.h        | C++      |         12 |          0 |          4 |         16 |
+| /home/gautam/new_compiler/compiler/src/include/macros.h      | C++      |          5 |          0 |          2 |          7 |
+| /home/gautam/new_compiler/compiler/src/include/parser.h      | C++      |         20 |          0 |         12 |         32 |
+| /home/gautam/new_compiler/compiler/src/include/tac.h         | C++      |          5 |          0 |          1 |          6 |
+| /home/gautam/new_compiler/compiler/src/include/token.h       | C++      |         42 |          1 |          6 |         49 |
+| /home/gautam/new_compiler/compiler/src/include/types.h       | C++      |          4 |          1 |          2 |          7 |
+| /home/gautam/new_compiler/compiler/src/include/visitor.h     | C++      |         23 |          0 |          4 |         27 |
+| /home/gautam/new_compiler/compiler/src/io.c                  | C        |         31 |          0 |          7 |         38 |
+| /home/gautam/new_compiler/compiler/src/lexer.c               | C        |        144 |          7 |         20 |        171 |
+| /home/gautam/new_compiler/compiler/src/list.c                | C        |         18 |          0 |          5 |         23 |
+| /home/gautam/new_compiler/compiler/src/main.c                | C        |         10 |          0 |          3 |         13 |
+| /home/gautam/new_compiler/compiler/src/parser.c              | C        |        266 |         35 |         60 |        361 |
+| /home/gautam/new_compiler/compiler/src/tac.c                 | C        |         45 |          0 |         16 |         61 |
+| /home/gautam/new_compiler/compiler/src/token.c               | C        |         52 |          1 |          4 |         57 |
+| /home/gautam/new_compiler/compiler/src/types.c               | C        |          9 |          0 |          3 |         12 |
+| /home/gautam/new_compiler/compiler/src/visitor.c             | C        |        137 |         10 |         42 |        189 |
+| Total                                                        |          |      1,453 |        125 |        331 |      1,909 |
++--------------------------------------------------------------+----------+------------+------------+------------+------------+

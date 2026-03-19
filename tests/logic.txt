@@ -1,0 +1,17 @@
+main = () -> {
+    x:int = 10;
+
+    if (x > 5){
+        print("Greater\n");
+    }
+    else {
+        print("Smaller\n");
+    }
+
+    if (x == 20){
+        print("Match\n");
+    }
+    else {
+        print("No Match\n");
+    }
+}

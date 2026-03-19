@@ -356,31 +356,100 @@ const char* asm_builtins =
 "current_input_ptr: .long global_input_buffer\n"
 ".section .text\n"
 
+// "builtin_input:\n"
+// "    pushl %ebp\n"
+// "    movl %esp, %ebp\n"
+// "    movl $3, %eax\n"                     // sys_read
+// "    movl $0, %ebx\n"                     // stdin
+// "    movl current_input_ptr, %ecx\n"      
+// "    movl $255, %edx\n"                   
+// "    int $0x80\n"                         // Read input. EAX holds the number of bytes read.
+// // --- Strip Newline and Bump Allocator ---
+// "    movl current_input_ptr, %ebx\n"      // Save the start address in EBX
+// "    movl %ebx, %ecx\n"                   
+// "    addl %eax, %ecx\n"                   // Move ECX to the very end of what was typed
+// "    decl %ecx\n"                         // Step back one character (to look at the last thing typed)
+// "    cmpb $10, (%ecx)\n"                  // Is it a newline (\n)?
+// "    jne .L_no_newline\n"                 // If not, jump down
+// "    movb $0, (%ecx)\n"                   // YES! Overwrite the \n with a null terminator (\0)
+// "    incl %ecx\n"                         // Move forward 1 byte for the next allocation
+// "    jmp .L_save_ptr\n"
+// ".L_no_newline:\n"
+// "    incl %ecx\n"                         // Step forward past the last character
+// "    movb $0, (%ecx)\n"                   // Add a null terminator
+// "    incl %ecx\n"                         // Move forward 1 byte for the next allocation
+// ".L_save_ptr:\n"
+// "    movl %ecx, current_input_ptr\n"      // Save the new free-space pointer!
+// "    movl %ebx, %eax\n"                   // Return the original string address in EAX
+// "    popl %ebp\n"
+// "    ret\n"
+
 "builtin_input:\n"
 "    pushl %ebp\n"
 "    movl %esp, %ebp\n"
+"    pushl %esi\n"                        
+"    movl current_input_ptr, %esi\n"      
+"    movl %esi, %ecx\n"                   
+
+// --- Phase 1: Skip leading whitespace (spaces, tabs, newlines) ---
+".L_skip_ws:\n"
 "    movl $3, %eax\n"                     // sys_read
 "    movl $0, %ebx\n"                     // stdin
-"    movl current_input_ptr, %ecx\n"      
-"    movl $255, %edx\n"                   
-"    int $0x80\n"                         // Read input. EAX holds the number of bytes read.
-// --- Strip Newline and Bump Allocator ---
-"    movl current_input_ptr, %ebx\n"      // Save the start address in EBX
-"    movl %ebx, %ecx\n"                   
-"    addl %eax, %ecx\n"                   // Move ECX to the very end of what was typed
-"    decl %ecx\n"                         // Step back one character (to look at the last thing typed)
-"    cmpb $10, (%ecx)\n"                  // Is it a newline (\n)?
-"    jne .L_no_newline\n"                 // If not, jump down
-"    movb $0, (%ecx)\n"                   // YES! Overwrite the \n with a null terminator (\0)
-"    incl %ecx\n"                         // Move forward 1 byte for the next allocation
-"    jmp .L_save_ptr\n"
-".L_no_newline:\n"
-"    incl %ecx\n"                         // Step forward past the last character
-"    movb $0, (%ecx)\n"                   // Add a null terminator
-"    incl %ecx\n"                         // Move forward 1 byte for the next allocation
-".L_save_ptr:\n"
-"    movl %ecx, current_input_ptr\n"      // Save the new free-space pointer!
-"    movl %ebx, %eax\n"                   // Return the original string address in EAX
+"    movl $1, %edx\n"                     // READ EXACTLY 1 BYTE
+"    int $0x80\n"
+"    cmpl $1, %eax\n"                     
+"    jne .L_read_done\n"                  // EOF or Error
+"    cmpb $32, (%ecx)\n"                  // Is the char <= 32? (Space is 32, \n is 10, \t is 9)
+"    jle .L_skip_ws\n"                    // If it's whitespace, loop and overwrite it!
+
+// --- Phase 2: Read the actual word/number ---
+"    incl %ecx\n"                         // We found a real character! Move pointer forward.
+".L_read_word:\n"
+"    movl $3, %eax\n"                     
+"    movl $0, %ebx\n"                     
+"    movl $1, %edx\n"                     
+"    int $0x80\n"
+"    cmpl $1, %eax\n"                     
+"    jne .L_read_done\n"                  // EOF
+"    cmpb $32, (%ecx)\n"                  // Is it whitespace? (Space/Newline)
+"    jle .L_read_done\n"                  // YES! We reached the end of the word. Break loop.
+"    incl %ecx\n"                         // NO! It's part of the word. Keep it and move forward.
+"    jmp .L_read_word\n"                  
+
+".L_read_done:\n"
+"    movb $0, (%ecx)\n"                   // Null-terminate the string
+"    incl %ecx\n"                         
+"    movl %ecx, current_input_ptr\n"      // Save pointer for next time
+"    movl %esi, %eax\n"                   // Return the string address
+"    popl %esi\n"
+"    popl %ebp\n"
+"    ret\n"
+
+// Add this right below your current "builtin_input" block
+".globl input_line\n"
+"builtin_input_line:\n"
+"    pushl %ebp\n"
+"    movl %esp, %ebp\n"
+"    pushl %esi\n"
+"    movl current_input_ptr, %esi\n"      
+"    movl %esi, %ecx\n"                   
+".L_line_read_loop:\n"
+"    movl $3, %eax\n"                     // sys_read
+"    movl $0, %ebx\n"                     // stdin
+"    movl $1, %edx\n"                     // read 1 byte
+"    int $0x80\n"
+"    cmpl $1, %eax\n"                     
+"    jne .L_line_read_done\n"             // EOF or Error
+"    cmpb $10, (%ecx)\n"                  // Is it exactly a Newline (\n)?
+"    je .L_line_read_done\n"              // YES! Stop reading.
+"    incl %ecx\n"                         // NO! It's a space/letter. Keep it.
+"    jmp .L_line_read_loop\n"             
+".L_line_read_done:\n"
+"    movb $0, (%ecx)\n"                   // Null-terminate
+"    incl %ecx\n"                         
+"    movl %ecx, current_input_ptr\n"      // Save pointer
+"    movl %esi, %eax\n"                   // Return string address
+"    popl %esi\n"
 "    popl %ebp\n"
 "    ret\n"
 
@@ -435,35 +504,41 @@ char* as_f_call(AST_T* ast, list_T* list)
   else if (strcmp(ast->name, "print") == 0)
   {
     if (args) {
-        // Loop through every argument passed to print(arg1, arg2, arg3)
         for (int i = 0; i < args->size; i++) {
             AST_T* arg = (AST_T*) args->items[i];
             char* val_s = as_f(arg, list);
             
-            // 1. Detect the data type!
             int is_string = 0; 
             
+            // 1. Detect if it's a literal string "hello"
             if (arg->type == AST_STRING) {
-                is_string = 1; // It's a literal "string"
-            } else if (arg->type == AST_VARIABLE) {
+                is_string = 1; 
+            } 
+            // 2. Detect if it's a direct function call like print(input())
+            else if (arg->type == AST_CALL && arg->name && strcmp(arg->name, "input") == 0) {
+                is_string = 1;
+            }
+            // 3. Detect if it's a variable
+            else if (arg->type == AST_VARIABLE) {
                 AST_T* var = var_lookup(list, arg->name);
-                // Remember we set data_type = 2 for strings in parser.c!
-                if (var && var->data_type == 2) { 
-                    is_string = 1; 
+                if (var) {
+                    // Check if defined as string (Type 2) OR if it holds a string pointer
+                    if (var->data_type == 2 || var->type == AST_STRING) {
+                        is_string = 1;
+                    }
                 }
             }
             
-            // 2. Choose the right builtin function
+            // Choose the right builtin
             const char* func_to_call = is_string ? "builtin_print_str" : "builtin_print_int";
 
-            // 3. Generate the assembly for this specific argument
             const char* template = "%s" 
                                    "pushl %%eax\n"    
                                    "call %s\n"
                                    "addl $4, %%esp\n"; 
             
             s = realloc(s, (strlen(s) + strlen(template) + strlen(val_s) + 64) * sizeof(char));
-            char* temp = calloc(strlen(template) + strlen(val_s) + 64, sizeof(char));
+            char* temp = calloc(strlen(template) + strlen(val_s) + 128, sizeof(char));
             
             sprintf(temp, template, val_s, func_to_call);
             strcat(s, temp);
@@ -480,6 +555,12 @@ char* as_f_call(AST_T* ast, list_T* list)
   {
     const char* template = "call builtin_input\n";
     s = realloc(s, strlen(s) + strlen(template) + 1);
+    strcat(s, template);
+  }
+  else if (strcmp(ast->name, "input_line") == 0) {
+    const char* template = "call builtin_input_line\n";
+    
+    s = realloc(s, (strlen(s) + strlen(template) + 1) * sizeof(char));
     strcat(s, template);
   }
   // Handle Python-style int(string)
@@ -588,9 +669,20 @@ void hoist_local_variables(AST_T* ast, list_T* list) {
             local_var->int_value = current_local_offset; 
             current_local_offset -= 4; 
             
-            // --- CRITICAL FIX: Transfer the data type! ---
-            local_var->data_type = ast->data_type; 
-            // ---------------------------------------------
+            // --- NEW: Smart Type Inference ---
+            local_var->data_type = ast->data_type; // Default to what the user asked for
+            
+            // Override: If assigning from input(), force it to be a String (Type 2)
+            if (ast->value && ast->value->type == AST_CALL && ast->value->name) {
+                if (strcmp(ast->value->name, "input") == 0 || strcmp(ast->value->name, "input_line") == 0) {
+                    local_var->data_type = 2; // 2 = String
+                }
+            }
+            // Optional: If assigning directly to a literal string (msg = "hello")
+            else if (ast->value && ast->value->type == AST_STRING) {
+                local_var->data_type = 2;
+            }
+            // ---------------------------------
             
             list_push(list, local_var);
         }
