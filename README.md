@@ -109,7 +109,7 @@ The compiler backend integrates several optimized components:
 - Variadic Call Handler – Dynamically dispatches arguments to builtin_print_int or builtin_print_str based on AST type information.
 
 ### Project Structure
-
+```text
 ├── examples
 │   ├── main.gv
 │   └── test.gv
@@ -141,6 +141,7 @@ The compiler backend integrates several optimized components:
     ├── token.c
     ├── types.c
     └── visitor.c
+```
 
 ## Module Description
 
