@@ -62,15 +62,14 @@ The compiler consists of the following modular phases:
 ### 4. Expansion of "Project Structure"
 Since your project has grown, adding descriptions for the internal header files makes it look like a professional API.
 
-```markdown
-### 📂 Internal Logic Mapping
+### Internal Logic Mapping
 - `src/visitor.c`: The heart of the **Semantic Analyzer**. It walks the AST to find type mismatches before assembly is even generated.
 - `src/as_frontend.c`: The **Code Generator**. Maps AST nodes to x86 opcodes (`movl`, `pushl`, `call`).
 - `src/builtins.c`: Contains the **Assembly Templates** for the runtime library.
 
 ---
 
-## 🚀 Recent Feature Showcase: String Manipulation
+## Recent Feature Showcase: String Manipulation
 
 GVR now supports direct character manipulation within strings.
 
@@ -227,7 +226,7 @@ make
 ./a.out
 ```
 
-### 🗓 Roadmap / Future Enhancements
+### Roadmap / Future Enhancements
 - [x] `for` loop syntax implementation
 - [x] Array indexing and mutation
 - [x] Character data type (`char`)
