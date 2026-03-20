@@ -24,5 +24,7 @@ char* as_f_access(AST_T* ast, list_T* list);
 void hoist_local_variables(AST_T* ast, list_T* list); // New: Pre-scan for local variable declarations and stack offset assignment
 char* as_f_for(AST_T* ast, list_T* list);
 char* as_f_string(AST_T* ast, list_T* list); // New: String literal handler
+char* as_f_array(AST_T* ast, list_T* list);
+char* as_f_array_alloc(AST_T* ast, list_T* list); // New: Array allocation handler
 
 #endif

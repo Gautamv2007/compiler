@@ -121,6 +121,25 @@ AST_T* parser_parse_factor(parser_T* parser) {
             
             return list_node;
         }
+        
+        case TOKEN_LBRACE: { // Changed to '{'
+            parser_eat(parser, TOKEN_LBRACE);
+            
+            AST_T* ast = init_ast(AST_ARRAY);
+            ast->children = init_list(sizeof(AST_T*));
+            
+            // Parse comma-separated items until we hit '}'
+            while (parser->token->type != TOKEN_RBRACE) {
+                list_push(ast->children, parser_parse_expr(parser));
+                if (parser->token->type == TOKEN_COMMA) {
+                    parser_eat(parser, TOKEN_COMMA);
+                }
+            }
+            
+            parser_eat(parser, TOKEN_RBRACE); // Consume the '}'
+            return ast;
+        }
+
         case TOKEN_STRING: {
             AST_T* ast = init_ast(AST_STRING);
             ast->string_value = calloc(strlen(parser->token->value) + 1, sizeof(char));
@@ -327,21 +346,46 @@ AST_T* parser_parse_id(parser_T* parser)
   strcpy(value, parser->token->value);
   parser_eat(parser, TOKEN_ID);
   
-  int parsed_data_type = 0; // 0 means "Unknown" or "No type specified"
+  int parsed_data_type = 0; // 0: Unknown, 1: Int, 2: String, 3: Array (NEW)
 
-  // NEW: Check for the colon to capture the data type (e.g., :int)
-  // NEW: Check for the colon to capture the data type (e.g., :int)
+  // 1. Check for the colon to capture the data type (e.g., :int)
   if (parser->token->type == TOKEN_COLON)
   {
       parser_eat(parser, TOKEN_COLON);
       
-      // Check the actual string value to be completely safe from Lexer quirks
       if (strcmp(parser->token->value, "int") == 0) {
-          parsed_data_type = 1; // 1 = Integer 
-          parser_eat(parser, parser->token->type); // Eat the type token safely
+          parsed_data_type = 1; 
+          parser_eat(parser, parser->token->type); 
+
+          // --- NEW: ARRAY TYPE OR ALLOCATION (int[] or int[20]) ---
+          if (parser->token->type == TOKEN_LBRACKET) {
+              parser_eat(parser, TOKEN_LBRACKET);
+              
+              if (parser->token->type == TOKEN_RBRACKET) {
+                  // It's just `int[]` (Array Initialization expected next)
+                  parser_eat(parser, TOKEN_RBRACKET);
+                  parsed_data_type = 3; // Let's use 3 for "Array"
+              } else {
+                  // It's `int[20]` (Array Allocation!)
+                  AST_T* size_expr = parser_parse_expr(parser);
+                  parser_eat(parser, TOKEN_RBRACKET);
+
+                  // Create the Allocation Node
+                  AST_T* alloc_node = init_ast(AST_ARRAY_ALLOC);
+                  alloc_node->value = size_expr;
+
+                  // Wrap it in an assignment to the variable name and return immediately
+                  AST_T* assign_node = init_ast(AST_ASSIGNMENT);
+                  assign_node->name = value;
+                  assign_node->data_type = 3; 
+                  assign_node->value = alloc_node;
+                  return assign_node;
+              }
+          }
+          // --------------------------------------------------------
       }
       else if (strcmp(parser->token->value, "string") == 0) { 
-          parsed_data_type = 2; // 2 = String 
+          parsed_data_type = 2;  
           parser_eat(parser, parser->token->type); 
       }
       else {
@@ -350,8 +394,17 @@ AST_T* parser_parse_id(parser_T* parser)
       }
   }
 
-  // Assignment: x:int = 5  OR  x = 5
-  // printf("[DEBUG Parser]: Checking assignment for '%s'. Token Type is: %d\n", value, parser->token->type);
+  // --- NEW: CHECK FOR ARRAY ACCESS BEFORE ASSIGNMENT (e.g., my_arr[0] = 99) ---
+  AST_T* array_access_node = NULL;
+  if (parser->token->type == TOKEN_LBRACKET) {
+      array_access_node = init_ast(AST_ACCESS);
+      array_access_node->name = value;
+      array_access_node->value = parser_parse_list(parser); // Captures the [0]
+  }
+  // ----------------------------------------------------------------------------
+
+
+  // 2. Assignment: x:int = 5  OR  x = 5  OR my_arr[0] = 99
   if(parser->token->type == TOKEN_EQUALS || 
     parser->token->type == TOKEN_PLUS_EQUALS ||
     parser->token->type == TOKEN_MINUS_EQUALS ||
@@ -359,16 +412,18 @@ AST_T* parser_parse_id(parser_T* parser)
     parser->token->type == TOKEN_DIV_EQUALS ||
     parser->token->type == TOKEN_MOD_EQUALS)
   {
-    int op_type = parser->token->type; // Remember which operator it is for the AST node
-    // token_T* op_token = parser->token;
-    
-    // 2. Eat the token dynamically so it doesn't crash
+    int op_type = parser->token->type; 
     parser_eat(parser, op_type);
     
     AST_T* ast = init_ast(AST_ASSIGNMENT);
     ast->name = value;
     ast->data_type = parsed_data_type; 
     
+    // --- NEW: ATTACH ARRAY ACCESS IF IT EXISTS ---
+    if (array_access_node != NULL) {
+        ast->left = array_access_node; // Tells backend we are writing to an index!
+    }
+    // ---------------------------------------------
     
     if (op_type == TOKEN_EQUALS)             ast->int_value = 1;
     else if (op_type == TOKEN_PLUS_EQUALS)   ast->int_value = 2;
@@ -376,7 +431,6 @@ AST_T* parser_parse_id(parser_T* parser)
     else if (op_type == TOKEN_MUL_EQUALS)    ast->int_value = 4;
     else if (op_type == TOKEN_DIV_EQUALS)    ast->int_value = 5;
     else if (op_type == TOKEN_MOD_EQUALS)    ast->int_value = 6;
-
 
     ast->value = parser_parse_expr(parser); 
 
@@ -386,61 +440,45 @@ AST_T* parser_parse_id(parser_T* parser)
     int existing_type = 0;
     for (int i = 0; i < sym_count; i++) {
         if (strcmp(sym_names[i], ast->name) == 0) {
-            existing_type = sym_types[i]; // We found it!
+            existing_type = sym_types[i]; 
             break;
         }
     }
 
     if (existing_type != 0) 
     {
-        // CASE 1: The user tried to re-declare the type (e.g., x:string = "hello")
-        if (parsed_data_type != 0 && parsed_data_type != existing_type) {
-            printf("\n[Semantic Error]: Variable '%s' already defined as '%s'.\n", 
-                   ast->name, existing_type == 1 ? "int" : "string");
-            printf("  -> You cannot re-declare it as '%s'!\n", 
-                   parsed_data_type == 1 ? "int" : "string");
-            exit(1);
-        }
-        
-        // CASE 2: They didn't re-declare the type, but tried to assign the wrong value type (e.g., x = "hello")
-        if (assigned_type != 0 && assigned_type != existing_type) {
-            printf("\n[Semantic Error]: Cannot assign a '%s' to variable '%s' (which is of type '%s').\n", 
-                   assigned_type == 1 ? "int" : "string", 
-                   ast->name, 
-                   existing_type == 1 ? "int" : "string");
-            exit(1);
+        // Bypass strict checks temporarily for Arrays since they act like pointers
+        if (existing_type != 3 && parsed_data_type != 3) {
+            if (parsed_data_type != 0 && parsed_data_type != existing_type) {
+                printf("\n[Semantic Error]: Variable '%s' already defined.\n", ast->name);
+                exit(1);
+            }
+            if (assigned_type != 0 && assigned_type != existing_type) {
+                printf("\n[Semantic Error]: Cannot assign mismatching type to '%s'.\n", ast->name);
+                exit(1);
+            }
         }
     } 
     else 
     {
         // IT IS A BRAND NEW VARIABLE!
         if (parsed_data_type != 0) {
-            // They explicitly provided a type (x:int = 5)
-            if (assigned_type != 0 && parsed_data_type != assigned_type) {
-                printf("\n[Semantic Error]: Type Mismatch for variable '%s'\n", ast->name);
-                exit(1);
-            }
-            // Save to Symbol Table
             sym_names[sym_count] = ast->name;
             sym_types[sym_count] = parsed_data_type;
             sym_count++;
         } 
         else if (assigned_type != 0) {
-            // BONUS: TYPE INFERENCE! 
             sym_names[sym_count] = ast->name;
             sym_types[sym_count] = assigned_type;
             sym_count++;
             ast->data_type = assigned_type; 
         }
     }
-    // printf("[DEBUG Parser]: Address: %p | '%s' Opcode is: %d\n", (void*)ast, ast->name, ast->int_value);
     return ast;
   }
 
-  // If a type was provided but NO equals sign (e.g., `x:int;`), handle it here
+  // 3. Uninitialized Declaration (e.g., x:int;)
   if (parsed_data_type != 0) {
-      // For now, we'll treat uninitialized variables as an assignment to 0
-      // You can change this later to a dedicated 'Declaration' AST node if you want
       AST_T* ast = init_ast(AST_ASSIGNMENT);
       ast->name = value;
       ast->data_type = parsed_data_type;
@@ -451,7 +489,13 @@ AST_T* parser_parse_id(parser_T* parser)
       return ast;
   }
 
-  // Variable Access or Function Call
+  // --- NEW: RETURN ARRAY ACCESS IF IT WAS JUST A READ (e.g. print(my_arr[0])) ---
+  if (array_access_node != NULL) {
+      return array_access_node;
+  }
+  // ------------------------------------------------------------------------------
+
+  // 4. Standard Variable Access or Function Call
   AST_T* ast = init_ast(AST_VARIABLE);
   ast->name = value;
 
@@ -463,12 +507,6 @@ AST_T* parser_parse_id(parser_T* parser)
       
     ast->value = args_node;
     ast->children = args_node->children; 
-  }
-  // If it's an array access
-  else if (parser->token->type == TOKEN_LBRACKET)
-  {
-      ast->type = AST_ACCESS;
-      ast->value = parser_parse_list(parser);
   }
 
   return ast;

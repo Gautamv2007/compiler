@@ -17,12 +17,15 @@ typedef struct AST_STRUCT
     AST_STRING,
     AST_STATEMENT,
     AST_ACCESS,
+    AST_ARRAY,
+    AST_ARRAY_ALLOC,
     AST_INT,
     AST_BINOP,      // New: For +, -, *, /
     AST_IF,         // New: For conditionals
     AST_WHILE,      // New: For loops
     AST_FOR,
     AST_NOOP,
+
   } type;
   
   list_T* children; 

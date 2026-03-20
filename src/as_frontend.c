@@ -381,10 +381,9 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 { 
   char *s = calloc(1, sizeof(char));
 
-// printf("[DEBUG Backend]: Address: %p | '%s' Opcode received is: %d\n", (void*)ast, ast->name, ast->int_value);  
+  // 1. FUNCTION DEFINITIONS (e.g., main = () -> { ... })
   if (ast->value->type == AST_FUNCTION)
   {
-    // ... [Your existing function definition logic stays exactly the same!] ...
     current_local_offset = -4; 
     AST_T* as_val = ast->value;
 
@@ -415,16 +414,12 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 
 
     // --- MISSING RETURN GUARDRAIL ---
-    AST_T* func_body = as_val->value; // This is the AST_COMPOUND block (the "{ ... }")
+    AST_T* func_body = as_val->value; 
 
     if (func_body && func_body->children && func_body->children->size > 0) 
     {
-        // 1. Grab the very last statement in the function body
         AST_T* last_stmt = (AST_T*) func_body->children->items[func_body->children->size - 1];
 
-        // 2. Check for return in two ways:
-        //    - As a generic statement (return;)
-        //    - As a function-style call (return 0;)
         int is_return_stmt = (last_stmt->type == AST_STATEMENT && 
                               last_stmt->name != NULL && 
                               strcmp(last_stmt->name, "return") == 0);
@@ -435,163 +430,169 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 
         int has_return = is_return_stmt || is_return_call;
 
-        // 3. Validation Logic
         if (!has_return) {
-            // Check if it's a "void" function
             AST_T* first_arg = (as_val->children && as_val->children->size > 0) ? 
                                (AST_T*)as_val->children->items[0] : NULL;
 
             int is_void = (first_arg && first_arg->name && strcmp(first_arg->name, "void") == 0);
 
             if (!is_void) {
-                // DEBUG: If you're still getting the error, uncomment this to see why:
-                // printf("[DEBUG]: Last node type was %d, name: %s\n", last_stmt->type, last_stmt->name);
-                
                 printf("\n[Compiler Error]: Missing return value in function '%s'!\n", ast->name);
                 exit(1);
             }
         }
     }
-    // --------------------------------
 
     // 4. Generate Function Body
-        char* as_val_val = as_f(as_val->value, list);
-        
-        // --- NEW: THE VOID SAFETY NET ---
-        // This safely closes the stack frame and returns, preventing Segfaults
-        // if the user drops off the edge of a void function.
-        const char* void_epilogue = "\n"
-                                    "movl %ebp, %esp\n"
-                                    "popl %ebp\n"
-                                    "ret\n";
-                                    
-        // Allocate space for the body AND our new safety net
-        s = realloc(s, (strlen(s) + strlen(as_val_val) + strlen(void_epilogue) + 1) * sizeof(char));
-        
-        strcat(s, as_val_val);
-        strcat(s, void_epilogue); // Inject the safety net at the very bottom!
-        // --------------------------------
-        
-        free(as_val_val);
-    }
-    else 
-    {
-        AST_T* existing_var = var_lookup(list, ast->name);
-        
-        if (!existing_var) {
-            printf("Compiler Error: Variable '%s' was not found or hoisted!\n", ast->name);
-            exit(1); 
-        }
+    char* as_val_val = as_f(as_val->value, list);
+    
+    const char* void_epilogue = "\n"
+                                "movl %ebp, %esp\n"
+                                "popl %ebp\n"
+                                "ret\n";
+                                
+    s = realloc(s, (strlen(s) + strlen(as_val_val) + strlen(void_epilogue) + 1) * sizeof(char));
+    
+    strcat(s, as_val_val);
+    strcat(s, void_epilogue); 
+    
+    free(as_val_val);
+  }
+  else 
+  {
+      // --- NEW: ARE WE ASSIGNING TO AN ARRAY INDEX? (e.g., arr[0] = 99) ---
+      if (ast->left != NULL && ast->left->type == AST_ACCESS) 
+      {
+          AST_T* var = var_lookup(list, ast->left->name);
+          if (!var) {
+              printf("Compiler Error: Array '%s' not found!\n", ast->left->name);
+              exit(1);
+          }
 
-        // --- UPDATED: CONSTANT PROPAGATION NOTEPAD LOGIC ---
-        // We only track the value if they are assigning a literal integer!
-        if (ast->value != NULL && ast->value->type == AST_INT) 
-        {
-            int found = 0;
-            for (int i = 0; i < tracked_count; i++) {
-                if (strcmp(tracked_vars[i], ast->name) == 0) {
-                    
-                    int op_code = ast->int_value; // Grab our opcode!
+          char* val_s = as_f(ast->value, list);
+          AST_T* index_ast = (AST_T*)ast->left->value->children->items[0];
+          char* index_s = as_f(index_ast, list);
 
-                    // Do the actual math in the notepad!
-                    if (op_code == 0 || op_code == 1) { // 1 is '='
-                        tracked_vals[i] = ast->value->int_value; 
-                    } 
-                    else if (op_code == 2) { // 2 is '+='
-                        tracked_vals[i] += ast->value->int_value;
-                    } 
-                    else if (op_code == 3) { // 3 is '-='
-                        tracked_vals[i] -= ast->value->int_value;
-                    } 
-                    else if (op_code == 4) { // 4 is '*='
-                        tracked_vals[i] *= ast->value->int_value;
-                    } 
-                    else if (op_code == 5) { // 5 is '/='
-                        if (ast->value->int_value != 0) { 
-                            tracked_vals[i] /= ast->value->int_value;
-                        }
-                    }
+          const char* array_template = 
+              "%s"                       // 1. Evaluate Value -> Result in EAX
+              "pushl %%eax\n"            // 2. Save Value to stack safely
+              "%s"                       // 3. Evaluate Index -> Result in EAX
+              "movl %%eax, %%ebx\n"      // 4. Move Index to EBX
+              "popl %%eax\n"             // 5. Restore Value back to EAX
+              "movl %d(%%ebp), %%ecx\n"  // 6. Load Array Base Pointer to ECX
+              
+              // 7. Store Value (EAX) into Memory at Base (ECX) + Index (EBX * 4)
+              "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
 
-                    found = 1;
-                    break;
-                }
-            }
-            // 2. If it is a new variable, add it to the notepad
-            if (!found) {
-                tracked_vars[tracked_count] = ast->name;
-                tracked_vals[tracked_count] = ast->value->int_value;
-                tracked_count++;
-            }
-        }
-        // -----------------------------------------------
+          s = realloc(s, (strlen(val_s) + strlen(index_s) + strlen(array_template) + 128) * sizeof(char));
+          sprintf(s, array_template, val_s, index_s, var->int_value);
 
-        char* val_s = as_f(ast->value, list);
-        const char* template;
+          free(val_s); free(index_s);
+          return s;
+      }
+      // --- END OF ARRAY ASSIGNMENT LOGIC ---
 
-        // --- NEW: BACKEND ASSEMBLY GENERATION FOR COMPOUND ASSIGNMENTS ---
-        // Standard Assignment (=)
-        int op_code = ast->int_value; // Remember, we stored the operator code in int_value during parsing!
+      // --- STANDARD VARIABLE ASSIGNMENT (=, +=, -=, etc) ---
+      AST_T* existing_var = var_lookup(list, ast->name);
+      
+      if (!existing_var) {
+          printf("Compiler Error: Variable '%s' was not found or hoisted!\n", ast->name);
+          exit(1); 
+      }
 
-        // printf("[DEBUG Backend]: Compiling assignment for '%s'. Operator is: '%s'\n", ast->name, ast->op ? ast->op : "NULL");
-        if (op_code == 0 || op_code == 1) {
-            template = "%s"                            
-                    "movl %%eax, %d(%%ebp)\n";      
-        } 
-        // 2: Plus-Equals (+=)
-        else if (op_code == 2) {
-            template = "%s"                            
-                    "addl %%eax, %d(%%ebp)\n";      
-        }
-        // 3: Minus-Equals (-=)
-        else if (op_code == 3) {
-            template = "%s"                            
-                    "subl %%eax, %d(%%ebp)\n";      
-        }
-        // 4: Times-Equals (*=)
-        else if (op_code == 4) {
-            template = "%s"                            
-                    "imull %d(%%ebp), %%eax\n"      
-                    "movl %%eax, %d(%%ebp)\n";      
-        }
-        // 5: Divide-Equals (/=)
-        else if (op_code == 5) {
-            template = "%s"                            
-                    "movl %%eax, %%ebx\n"           
-                    "movl %d(%%ebp), %%eax\n"       
-                    "cdq\n"                         
-                    "idivl %%ebx\n"                 
-                    "movl %%eax, %d(%%ebp)\n";      
-        }
+      if (ast->value != NULL && ast->value->type == AST_INT) 
+      {
+          int found = 0;
+          for (int i = 0; i < tracked_count; i++) {
+              if (strcmp(tracked_vars[i], ast->name) == 0) {
+                  
+                  int op_code = ast->int_value; 
 
-        else if (op_code == 6) {
-            int found = 0;
-            for (int i = 0; i < tracked_count; i++) {
-                if (strcmp(tracked_vars[i], ast->name) == 0) {
-                    if (ast->value->int_value != 0) {
-                        // UPDATE the existing value at index i
-                        tracked_vals[i] %= ast->value->int_value;
-                    }
-                    found = 1;
-                    break;
-                }
-            }
-            template = "%s"                            
-                    "movl %%eax, %%ebx\n"           
-                    "movl %d(%%ebp), %%eax\n"       
-                    "cdq\n"                         
-                    "idivl %%ebx\n"                 
-                    "movl %%edx, %d(%%ebp)\n";      
-        }
+                  if (op_code == 0 || op_code == 1) { 
+                      tracked_vals[i] = ast->value->int_value; 
+                  } 
+                  else if (op_code == 2) { 
+                      tracked_vals[i] += ast->value->int_value;
+                  } 
+                  else if (op_code == 3) { 
+                      tracked_vals[i] -= ast->value->int_value;
+                  } 
+                  else if (op_code == 4) { 
+                      tracked_vals[i] *= ast->value->int_value;
+                  } 
+                  else if (op_code == 5) { 
+                      if (ast->value->int_value != 0) { 
+                          tracked_vals[i] /= ast->value->int_value;
+                      }
+                  }
 
-        s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
-        sprintf(s, template, val_s, existing_var->int_value, existing_var->int_value);
-        // -----------------------------------------------------------------
+                  found = 1;
+                  break;
+              }
+          }
+          if (!found) {
+              tracked_vars[tracked_count] = ast->name;
+              tracked_vals[tracked_count] = ast->value->int_value;
+              tracked_count++;
+          }
+      }
 
-        free(val_s);
-    }
-    return s;
+      char* val_s = as_f(ast->value, list);
+      const char* template;
+
+      int op_code = ast->int_value; 
+
+      if (op_code == 0 || op_code == 1) {
+          template = "%s"                            
+                  "movl %%eax, %d(%%ebp)\n";      
+      } 
+      else if (op_code == 2) {
+          template = "%s"                            
+                  "addl %%eax, %d(%%ebp)\n";      
+      }
+      else if (op_code == 3) {
+          template = "%s"                            
+                  "subl %%eax, %d(%%ebp)\n";      
+      }
+      else if (op_code == 4) {
+          template = "%s"                            
+                  "imull %d(%%ebp), %%eax\n"      
+                  "movl %%eax, %d(%%ebp)\n";      
+      }
+      else if (op_code == 5) {
+          template = "%s"                            
+                  "movl %%eax, %%ebx\n"           
+                  "movl %d(%%ebp), %%eax\n"       
+                  "cdq\n"                         
+                  "idivl %%ebx\n"                 
+                  "movl %%eax, %d(%%ebp)\n";      
+      }
+      else if (op_code == 6) {
+          int found = 0;
+          for (int i = 0; i < tracked_count; i++) {
+              if (strcmp(tracked_vars[i], ast->name) == 0) {
+                  if (ast->value->int_value != 0) {
+                      tracked_vals[i] %= ast->value->int_value;
+                  }
+                  found = 1;
+                  break;
+              }
+          }
+          template = "%s"                            
+                  "movl %%eax, %%ebx\n"           
+                  "movl %d(%%ebp), %%eax\n"       
+                  "cdq\n"                         
+                  "idivl %%ebx\n"                 
+                  "movl %%edx, %d(%%ebp)\n";      
+      }
+
+      s = realloc(s, (strlen(template) + strlen(val_s) + 64) * sizeof(char));
+      sprintf(s, template, val_s, existing_var->int_value, existing_var->int_value);
+      
+      free(val_s);
+  }
+  return s;
 }
-
 
 char* as_f_variable(AST_T* ast, list_T* list) 
 {
@@ -683,8 +684,10 @@ const char* asm_builtins =
 // --- NEW: Dynamic Bump Allocator for Input ---
 ".section .bss\n"
 ".lcomm global_input_buffer, 1024\n"
+".lcomm global_heap, 8192\n"
 ".section .data\n"
 "current_input_ptr: .long global_input_buffer\n"
+"heap_ptr: .long global_heap\n"
 ".section .text\n"
 
 "builtin_input:\n"
@@ -999,8 +1002,30 @@ char* as_f_root(AST_T* ast, list_T* list)
 
 char* as_f_access(AST_T* ast, list_T* list)
 {
-  // For now, redirect access to variable lookup to get the raw value
-  return as_f_variable(ast, list);
+    AST_T* var = var_lookup(list, ast->name);
+    if (!var) {
+        printf("[Compiler Error]: Array '%s' is not defined.\n", ast->name);
+        exit(1);
+    }
+
+    // Evaluate the Index
+    AST_T* index_ast = (AST_T*)ast->value->children->items[0];
+    char* index_s = as_f(index_ast, list);
+    
+    char* s = calloc(strlen(index_s) + 256, sizeof(char));
+    sprintf(s, 
+        "%s"                        // Evaluate the index (result goes into %eax)
+        "movl %%eax, %%ebx\n"       // Move the index into %ebx
+        "movl %d(%%ebp), %%eax\n"   // Load the Array Base Pointer into %eax
+        
+        // --- X86 POINTER ARITHMETIC MAGIC ---
+        "movl (%%eax, %%ebx, 4), %%eax\n", 
+        
+        index_s, var->int_value
+    );
+
+    free(index_s);
+    return s;
 }
 
 //I am using this function to find all local variables and assign them stack offsets before codegen. This way, when we encounter an assignment to a new variable anywhere in the function, we can assign it a unique stack offset and store that in the AST node. Then, when we access that variable later, we can generate the correct assembly to read/write from that stack offset.
@@ -1064,7 +1089,66 @@ char* as_f(AST_T* ast, list_T* list) {
     case AST_IF:         return as_f_if(ast, list);
 
     case AST_STRING:     return as_f_string(ast, list); 
+
+    case AST_ARRAY:      return as_f_array(ast, list);
+    case AST_ACCESS:     return as_f_access(ast, list);
+    case AST_ARRAY_ALLOC: return as_f_array_alloc(ast, list);
     default: { printf("[As frontend]: No implementation for type `%d`\n", ast->type); exit(1); }
   }
 }
 
+
+char* as_f_array(AST_T* ast, list_T* list) {
+    // 1. Calculate how much memory we need (4 bytes per item)
+    int array_size = ast->children->size * 4;
+    
+    char* s = calloc(1024, sizeof(char));
+    
+    // 2. Grab memory from our custom Heap!
+    sprintf(s, 
+        "movl heap_ptr, %%eax\n"        // Get the current free memory address
+        "movl %%eax, %%edi\n"           // Save a copy of it in %edi
+        "addl $%d, heap_ptr\n",         // Bump the heap pointer forward for the NEXT array!
+        array_size
+    );
+
+    // 3. Evaluate each item and slot it into the array's memory
+    for (int i = 0; i < ast->children->size; i++) {
+        AST_T* child = (AST_T*)ast->children->items[i];
+        char* child_s = as_f(child, list);
+        
+        char* store_s = calloc(strlen(child_s) + 128, sizeof(char));
+        sprintf(store_s, 
+            "%s"                        // Evaluate item (puts result in %eax)
+            "movl %%eax, %d(%%edi)\n",  // MAGIC: Store %eax into the Array Memory at the correct offset!
+            child_s, i * 4              // Offset is 0, 4, 8, 12, etc.
+        );
+        
+        s = realloc(s, strlen(s) + strlen(store_s) + 1);
+        strcat(s, store_s);
+        free(child_s); free(store_s);
+    }
+    
+    // 4. Put the Array's Base Pointer back into %eax so it can be saved to the variable
+    strcat(s, "movl %edi, %eax\n");
+    return s;
+}
+
+
+char* as_f_array_alloc(AST_T* ast, list_T* list) {
+    // ast->value contains the size (e.g., 20). It could even be a variable!
+    char* size_s = as_f(ast->value, list);
+    char* s = calloc(strlen(size_s) + 256, sizeof(char));
+    
+    sprintf(s, 
+        "%s"                        // Evaluate the size (Result in %eax)
+        "imull $4, %%eax\n"         // Multiply size by 4 bytes (Result in %eax)
+        "movl heap_ptr, %%edi\n"    // Get current free heap pointer
+        "addl %%eax, heap_ptr\n"    // Bump the heap pointer forward by the size!
+        "movl %%edi, %%eax\n",      // Put the Base Pointer in %eax to return it
+        size_s
+    );
+    
+    free(size_s);
+    return s;
+}

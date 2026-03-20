@@ -55,6 +55,9 @@ AST_T* visitor_visit(visitor_T* visitor, AST_T* node, list_T* list)
     case AST_FOR:        return visitor_visit_for(visitor, node, list);
     case AST_IF:         return visitor_visit_if(visitor, node, list);
 
+    case AST_ARRAY:      return visitor_visit_array(visitor, node, list);
+    case AST_ARRAY_ALLOC: return visitor_visit_array_alloc(visitor, node, list);
+
     case AST_STRING:     return visitor_visit_string(visitor, node, list);
     
     default: { printf("[Visitor]: Don't know how to handle AST of type `%d`\n", node->type); exit(1); }
@@ -140,12 +143,20 @@ AST_T* visitor_visit_assignment(visitor_T* visitor, AST_T* node, list_T* list)
   AST_T* new_var = init_ast(AST_ASSIGNMENT);
   new_var->name = node->name;
   new_var->data_type = node->data_type;
-
   new_var->int_value = node->int_value;
 
   // Assign a unique stack offset!
   visitor->stack_count += 4; 
-  new_var->stack_offset = visitor->stack_count; // Store this in the AST node
+  new_var->stack_offset = visitor->stack_count; 
+
+  // --- NEW: WE MUST PRESERVE THE LEFT/RIGHT NODES FOR ARRAYS! ---
+  if (node->left) {
+      new_var->left = visitor_visit(visitor, node->left, list);
+  }
+  if (node->right) {
+      new_var->right = visitor_visit(visitor, node->right, list);
+  }
+  // --------------------------------------------------------------
 
   new_var->value = visitor_visit(visitor, node->value, list);
   list_push(list, new_var);
@@ -197,11 +208,19 @@ AST_T* visitor_visit_int(visitor_T* visitor, AST_T* node, list_T* list)
 {
   return node;
 }
+
 AST_T* visitor_visit_access(visitor_T* visitor, AST_T* node, list_T* list)
 {
-  return node;
+  AST_T* access_node = init_ast(AST_ACCESS);
+  access_node->name = node->name;
+  
+  // Visit the contents of the brackets (the index)
+  if (node->value) {
+      access_node->value = visitor_visit(visitor, node->value, list);
+  }
+  
+  return access_node;
 }
-
 
 AST_T* visitor_visit_if(visitor_T* visitor, AST_T* node, list_T* list)
 {
@@ -231,3 +250,31 @@ AST_T* visitor_visit_string(visitor_T* visitor, AST_T* node, list_T* list)
     return node;
 }
 
+
+AST_T* visitor_visit_array(visitor_T* visitor, AST_T* node, list_T* list)
+{
+    AST_T* arr_node = init_ast(AST_ARRAY);
+    
+    // Deep copy and visit all the items inside the { 10, 20, 30 }
+    if (node->children) {
+        for (unsigned int i = 0; i < node->children->size; i++) {
+            AST_T* child = (AST_T*) node->children->items[i];
+            AST_T* visited_child = visitor_visit(visitor, child, list);
+            list_push(arr_node->children, visited_child);
+        }
+    }
+    
+    return arr_node;
+}
+
+AST_T* visitor_visit_array_alloc(visitor_T* visitor, AST_T* node, list_T* list)
+{
+    AST_T* alloc_node = init_ast(AST_ARRAY_ALLOC);
+    
+    // Visit the size expression (e.g., the '20' in int[20])
+    if (node->value) {
+        alloc_node->value = visitor_visit(visitor, node->value, list);
+    }
+    
+    return alloc_node;
+}
