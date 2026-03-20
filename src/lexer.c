@@ -49,7 +49,7 @@ token_T* lexer_advance_current(lexer_T* lexer, int type)
 void lexer_skip_whitespace(lexer_T *lexer)
 {
   while(lexer->c == 13 || lexer->c == 10 || lexer->c == ' ' || lexer->c == '\t')
-    lexer_advance(lexer);
+  lexer_advance(lexer);
 }
 
 token_T* lexer_parse_id(lexer_T* lexer)
@@ -62,15 +62,12 @@ token_T* lexer_parse_id(lexer_T* lexer)
     lexer_advance(lexer);
   }
 
-  // Keyword checks
   if (strcmp(value, "while") == 0) return init_token(value, TOKEN_WHILE);
   if (strcmp(value, "for") == 0) return init_token(value, TOKEN_FOR);
   if (strcmp(value, "if") == 0) return init_token(value, TOKEN_IF);
   if (strcmp(value, "elif") == 0) return init_token(value, TOKEN_ELIF);
   if (strcmp(value, "else") == 0) return init_token(value, TOKEN_ELSE);
   if (strcmp(value, "return") == 0) return init_token(value, TOKEN_RETURN);
-  
-  // NEW: Add the int data type keyword
   if (strcmp(value, "int") == 0) return init_token(value, TOKEN_KW_INT); 
   if (strcmp(value, "str") == 0) return init_token(value, TOKEN_KW_STR);
 
@@ -119,31 +116,24 @@ token_T* lexer_next_token(lexer_T* lexer)
       case '[': return lexer_advance_current(lexer, TOKEN_LBRACKET);
       case ']': return lexer_advance_current(lexer, TOKEN_RBRACKET);
       case '+': {
-        // Check for += operator
         if (lexer_peek(lexer, 1) == '=') {
-          // printf("[DEBUG Lexer]: Successfully found '+=' token!\n");
-
           lexer_advance(lexer); 
           return lexer_advance_with(lexer, init_token("+=", TOKEN_PLUS_EQUALS));
         }
         return lexer_advance_current(lexer, TOKEN_PLUS);
       }
       case '-': {
-        // Check for -= operator
         if (lexer_peek(lexer, 1) == '=') {
           lexer_advance(lexer);
           return lexer_advance_with(lexer, init_token("-=", TOKEN_MINUS_EQUALS));
         }
-        // Check if the next character is '>'
           if (lexer_peek(lexer, 1) == '>') {
               lexer_advance(lexer); 
               return lexer_advance_with(lexer, init_token("->", TOKEN_ARROW_RIGHT));
           }
-          // Otherwise, it's just a minus sign for math
           return lexer_advance_current(lexer, TOKEN_MINUS);
       }
       case '*': {
-        // Check for *= operator
           if (lexer_peek(lexer, 1) == '=') {
             lexer_advance(lexer); 
             return lexer_advance_with(lexer, init_token("*=", TOKEN_MUL_EQUALS));
@@ -151,7 +141,6 @@ token_T* lexer_next_token(lexer_T* lexer)
           return lexer_advance_current(lexer, TOKEN_MUL);
       }
       case '/': {
-        // Check for /= operator
           if (lexer_peek(lexer, 1) == '=') {
             lexer_advance(lexer); 
             return lexer_advance_with(lexer, init_token("/=", TOKEN_DIV_EQUALS));
@@ -159,7 +148,6 @@ token_T* lexer_next_token(lexer_T* lexer)
           return lexer_advance_current(lexer, TOKEN_DIV);
       }
       case '%': {
-        // Check for %= operator
           if (lexer_peek(lexer, 1) == '=') {
             lexer_advance(lexer); 
             return lexer_advance_with(lexer, init_token("%=", TOKEN_MOD_EQUALS));
@@ -180,35 +168,29 @@ token_T* lexer_next_token(lexer_T* lexer)
           }
           return lexer_advance_current(lexer, TOKEN_GT);
       }
-      // Inside your lexer loop/switch:
-
       case '&':
           if (lexer_peek(lexer, 1) == '&') {
-              lexer_advance(lexer); // consume first '&'
-              lexer_advance(lexer); // consume second '&'
-              return init_token("&&", TOKEN_AND); // Define TOKEN_AND in token.h
+              lexer_advance(lexer);
+              lexer_advance(lexer); 
+              return init_token("&&", TOKEN_AND); 
           }
-          // Handle single '&' if you want bitwise operators later
           break;
 
       case '|':
           if (lexer_peek(lexer, 1) == '|') {
-              lexer_advance(lexer); // consume first '|'
-              lexer_advance(lexer); // consume second '|'
-              return init_token("||", TOKEN_OR); // Define TOKEN_OR in token.h
+              lexer_advance(lexer);
+              lexer_advance(lexer); 
+              return init_token("||", TOKEN_OR);
           }
           break;
-      // Inside your lexer_next_token switch/loop:
-
       case '!': {
           if (lexer_peek(lexer, 1) == '=') {
-              lexer_advance(lexer); // consume '!'
-              lexer_advance(lexer); // consume '='
-              return init_token("!=", TOKEN_NOT_EQUALS); // Add to token.h if you haven't!
+              lexer_advance(lexer);
+              lexer_advance(lexer);
+              return init_token("!=", TOKEN_NOT_EQUALS);
           }
-          
-          lexer_advance(lexer); // consume just the '!'
-          return init_token("!", TOKEN_BANG); // Add TOKEN_BANG to token.h
+          lexer_advance(lexer); 
+          return init_token("!", TOKEN_BANG); 
       }
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
@@ -228,23 +210,19 @@ char* lexer_get_char_as_str(lexer_T* lexer) {
 }
 
 token_T* lexer_collect_string(lexer_T* lexer) {
-    lexer_advance(lexer); // Skip the opening "
+    lexer_advance(lexer); 
 
     char* value = calloc(1, sizeof(char));
     value[0] = '\0';
 
     while (lexer->c != '"' && lexer->c != '\0') {
-        // Fix 1: Using 'lexer_get_char_as_str' as suggested by the compiler
         char* s = lexer_get_char_as_str(lexer); 
         value = realloc(value, (strlen(value) + strlen(s) + 1) * sizeof(char));
         strcat(value, s);
         free(s);
         lexer_advance(lexer);
     }
+    lexer_advance(lexer); 
 
-    lexer_advance(lexer); // Skip the closing "
-
-    // Fix 2: Swap the arguments! 
-    // Your init_token wants (char* value, int type)
     return init_token(value, TOKEN_STRING); 
 }

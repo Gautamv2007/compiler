@@ -12,27 +12,16 @@ typedef struct PARSER_STRUCT
 } parser_T;
 
 parser_T* init_parser(lexer_T* lexer);
-
 token_T* parser_eat(parser_T* parser, int type);
-
 AST_T* parser_parse(parser_T* parser);
-
 int get_expression_type(AST_T* node);
-
 AST_T* parser_parse_id(parser_T* parser);
-
 AST_T* parser_parse_block(parser_T* parser);
-
 AST_T* parser_parse_list(parser_T* parser);
-
 AST_T* parser_parse_int(parser_T* parser);
-
 AST_T* parser_parse_expr(parser_T* parser);
-
 AST_T* parser_parse_compound(parser_T* parser);
-
 AST_T* parser_parse_for(parser_T* parser, list_T* list);
-
 AST_T* parser_parse_logical(parser_T* parser);
 
 #endif

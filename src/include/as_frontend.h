@@ -16,15 +16,15 @@ char* as_f_assignment(AST_T* ast, list_T* list);
 char* as_f_variable(AST_T* ast, list_T* list);
 char* as_f_call(AST_T* ast, list_T* list);
 char* as_f_int(AST_T* ast, list_T* list);
-char* as_f_binop(AST_T* ast, list_T* list); // New: Arithmetic handler
-char* as_f_while(AST_T* ast, list_T* list); // New: Loop handler
-char* as_f_for(AST_T* ast, list_T* list);   // New: For-loop handler
-char* as_f_if(AST_T* ast, list_T* list);    // New: Conditional handler
+char* as_f_binop(AST_T* ast, list_T* list); //arithmetic handler
+char* as_f_while(AST_T* ast, list_T* list); //loop handler
+char* as_f_for(AST_T* ast, list_T* list);   //for-loop handler
+char* as_f_if(AST_T* ast, list_T* list);    //conditional handler
 char* as_f_access(AST_T* ast, list_T* list);
-void hoist_local_variables(AST_T* ast, list_T* list); // New: Pre-scan for local variable declarations and stack offset assignment
+void hoist_local_variables(AST_T* ast, list_T* list); //pre-scan for local variable declarations and stack offset assignment
 char* as_f_for(AST_T* ast, list_T* list);
-char* as_f_string(AST_T* ast, list_T* list); // New: String literal handler
+char* as_f_string(AST_T* ast, list_T* list); //string literal handler
 char* as_f_array(AST_T* ast, list_T* list);
-char* as_f_array_alloc(AST_T* ast, list_T* list); // New: Array allocation handler
+char* as_f_array_alloc(AST_T* ast, list_T* list); //array allocation handler
 
 #endif

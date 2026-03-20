@@ -20,9 +20,9 @@ typedef struct AST_STRUCT
     AST_ARRAY,
     AST_ARRAY_ALLOC,
     AST_INT,
-    AST_BINOP,      // New: For +, -, *, /
-    AST_IF,         // New: For conditionals
-    AST_WHILE,      // New: For loops
+    AST_BINOP,      //for +, -, *, /
+    AST_IF,         //for conditionals
+    AST_WHILE,      //for loops
     AST_FOR,
     AST_NOOP,
 
@@ -31,17 +31,17 @@ typedef struct AST_STRUCT
   list_T* children; 
   char* name;
   char* string_value;
-  char* op;         // New: To store the operator (e.g., "+", "<")
+  char* op;         //for storing the operator (e.g., "+", "<")
 
   int stack_offset;
   
-  struct AST_STRUCT* left;  // New: For Binary Ops (left side)
-  struct AST_STRUCT* right; // New: For Binary Ops (right side)
-  struct AST_STRUCT* value; // For assignments/returns
+  struct AST_STRUCT* left;  //for Binary Ops (left side)
+  struct AST_STRUCT* right; //for Binary Ops (right side)
+  struct AST_STRUCT* value; //for assignments/returns
   
   int int_value;
   int data_type;
-  int int_value2; // Optional: For future use (e.g., array sizes, second operand in certain operations)
+  int int_value2; //for future use (e.g., array sizes, second operand in certain operations)
 
   // Function pointer for the visitor to execute logic specific to this node
   struct AST_STRUCT* (*fptr)(struct VISITOR_STRUCT* visitor, struct AST_STRUCT* node, list_T* list);

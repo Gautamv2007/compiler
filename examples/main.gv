@@ -1,28 +1,9 @@
-check = (x:int) -> {
-  i:int = 2;
-  flag:int = 0;
-  while(i < x){
-    rem:int = x%i;
-    if (rem == 0){
-      flag = 1;
-    }
-    i = i + 1;
-  }
-  return flag;
-}
-
 main = () -> {
-  print("Enter a number: ");
-  x:int = to_int(input());
-
-  out:int = check(x);
-
-  if (out == 0){
-    print("The number is prime\n");
-  }
-  else {
-    print("The number is not prime\n");
-  }
-
+  hypercube:int[10][10][10][10];
+  
+  hypercube[2][5][8][9] = 42;
+  
+  print(hypercube[2][5][8][9]);
+  
   return 0;
 }

@@ -4,11 +4,10 @@
 #include <string.h>
 #include <stdio.h>
 
-// --- CONSTANT PROPAGATION NOTEPAD ---
+//constant propogation tracking to avoid division by 0
 char* tracked_vars[100];
 int tracked_vals[100];
 int tracked_count = 0;
-// ------------------------------------
 
 static int label_count = 0;
 static int current_local_offset = -4; // Start at -4 for the first local variable
@@ -34,12 +33,8 @@ static AST_T* var_lookup(list_T* list, const char* name)
   return 0;
 }
 
-//For string function 
 char* as_f_string(AST_T* ast, list_T* list) {
     int label = string_count++;
-    
-    // 1. Add string to the global data section (e.g., .L_STR_0: .asciz "Hello World")
-    // .asciz automatically adds a null-terminator (\0) to the end of the string!
     const char* data_template = ".L_STR_%d:\n    .asciz \"%s\"\n";
     
     char* new_data = calloc(strlen(data_template) + strlen(ast->string_value) + 32, sizeof(char));
@@ -52,8 +47,6 @@ char* as_f_string(AST_T* ast, list_T* list) {
     strcat(string_data_section, new_data);
     free(new_data);
 
-    // 2. Return the assembly to load the string's memory pointer into EAX
-    // Notice the '$' before the label. We want the memory ADDRESS, not the value at the address.
     const char* text_template = "movl $.L_STR_%d, %%eax\n";
     char* s = calloc(strlen(text_template) + 32, sizeof(char));
     sprintf(s, text_template, label);
@@ -72,7 +65,7 @@ char* as_f_compound(AST_T* ast, list_T* list)
     char* next_value = as_f(child_ast, list);
     value = realloc(value, (strlen(next_value) + strlen(value) + 1) * sizeof(char));
     strcat(value, next_value);
-    free(next_value); // Prevent leak
+    free(next_value);
   }
 
   return value;
@@ -84,7 +77,6 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     char* right_s = as_f(ast->right, list);
     char* left_s = as_f(ast->left, list);
 
-    // Both left_s and right_s now leave their results in EAX
     const char* template = 
         "%s"                  // Left side result into EAX
         "pushl %%eax\n"       // Save left side
@@ -95,7 +87,6 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     s = realloc(s, (strlen(right_s) + strlen(left_s) + strlen(template) + 512) * sizeof(char));
     sprintf(s, template, left_s, right_s);
 
-    // Math Operators
     char* op_s = calloc(512, sizeof(char));
 
     if (strcmp(ast->op, "&&") == 0) {
@@ -134,8 +125,7 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         strcat(s, "imull %ebx, %eax\n");
     }
     else if (strcmp(ast->op, "/") == 0) {
-      // --- THE REAL Anti-Div-By-Zero Guardrail ---
-      // We check the actual integer value instead of the name pointer!
+      // We check the actual integer value instead of the name pointer
       if (ast->right->type == AST_INT && ast->right->int_value == 0) 
       {
           printf("\n[Math Error]: Division by literal zero detected!\n");
@@ -143,29 +133,24 @@ char* as_f_binop(AST_T* ast, list_T* list) {
           exit(1);
       }
 
-      // Check 2: Did they use a variable that we KNOW is zero? (e.g., 10 / y)
+      //Check if it's a variable we are dividing by, and if we have tracked it as being zero
       if (ast->right->type == AST_VARIABLE && ast->right->name != NULL) 
       {
-          // Look up the variable in our notepad
           for (int i = 0; i < tracked_count; i++) {
               if (strcmp(tracked_vars[i], ast->right->name) == 0) {
-                  // We found it! Is the value zero?
                   if (tracked_vals[i] == 0) {
                       printf("\n[Math Error]: Division by zero detected via variable '%s'!\n", ast->right->name);
                       printf("  -> My Constant Propagation engine tracked '%s' and knows it currently holds '0'.\n", ast->right->name);
                       exit(1);
                   }
-                  break; // We found the variable, no need to keep searching
+                  break;
               }
           }
       }
-      // -------------------------------------------
-
       // Generate assembly for left and right sides
       char* left_val = as_f(ast->left, list);
       char* right_val = as_f(ast->right, list);
 
-      // --- NEW: Run-Time Guardrail ---
       // We use a static counter so every division gets a unique label!
       static int div_count = 0; 
       div_count++;
@@ -246,7 +231,6 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         free(left_val); free(right_val);
     }
 
-    // --- GREATER THAN OR EQUAL TO (>=) ---
     else if (strcmp(ast->op, ">=") == 0) 
     {
         char* left_val = as_f(ast->left, list);
@@ -355,7 +339,6 @@ char* as_f_if(AST_T* ast, list_T* list) {
             ".L_ELSE_%d:\n"      // <--- ELSE LABEL
             "%s"                 // Run the ELSE body
             ".L_IF_END_%d:\n",   // <--- END LABEL
-            // vvv FIX is here: removed the extra 'label' argument! vvv
             condition_s, label, if_body_s, label, label, else_body_s, label);
     } 
     // If it's just a standard IF block (no else)
@@ -381,7 +364,6 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 { 
   char *s = calloc(1, sizeof(char));
 
-  // 1. FUNCTION DEFINITIONS (e.g., main = () -> { ... })
   if (ast->value->type == AST_FUNCTION)
   {
     current_local_offset = -4; 
@@ -412,8 +394,6 @@ char* as_f_assignment(AST_T* ast, list_T* list)
     s = realloc(s, (strlen(template) + (strlen(ast->name) * 2) + 64) * sizeof(char));
     sprintf(s, template, ast->name, ast->name, stack_space_needed);
 
-
-    // --- MISSING RETURN GUARDRAIL ---
     AST_T* func_body = as_val->value; 
 
     if (func_body && func_body->children && func_body->children->size > 0) 
@@ -442,8 +422,7 @@ char* as_f_assignment(AST_T* ast, list_T* list)
             }
         }
     }
-
-    // 4. Generate Function Body
+    //generate Function Body
     char* as_val_val = as_f(as_val->value, list);
     
     const char* void_epilogue = "\n"
@@ -460,74 +439,74 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   }
   else 
   {
-      // --- NEW: ARE WE ASSIGNING TO AN ARRAY INDEX? (e.g., arr[0] = 99) ---
-      // --- ARE WE ASSIGNING TO AN ARRAY INDEX? (1D or 2D) ---
       if (ast->left != NULL && ast->left->type == AST_ACCESS) 
       {
-          AST_T* var = var_lookup(list, ast->left->name);
+          AST_T* access_node = ast->left;
+          AST_T* var = var_lookup(list, access_node->name);
           if (!var) {
-              printf("Compiler Error: Array '%s' not found!\n", ast->left->name);
+              printf("Compiler Error: Array '%s' not found!\n", access_node->name);
               exit(1);
           }
 
-          char* val_s = as_f(ast->value, list);
+          char* s = calloc(1, sizeof(char));
           
-          AST_T* row_ast = (AST_T*)ast->left->value->children->items[0];
-          char* row_s = as_f(row_ast, list);
+          //evaluate Value to store -> Result in EAX, push to stack
+          char* val_s = as_f(ast->value, list);
+          s = realloc(s, strlen(val_s) + 64);
+          sprintf(s, "%s" "pushl %%eax\n", val_s);
+          free(val_s);
+          
+          //evaluate the very first Index (i0)
+          AST_T* first_index_ast = (AST_T*)((AST_T*)access_node->children->items[0])->children->items[0];
+          char* first_idx_s = as_f(first_index_ast, list);
+          
+          s = realloc(s, strlen(s) + strlen(first_idx_s) + 1);
+          strcat(s, first_idx_s);
+          free(first_idx_s);
 
-          // IS IT A 2D ARRAY WRITE?
-          if (ast->left->right != NULL) 
+          //loop through remaining dimensions
+          for (unsigned int i = 1; i < access_node->children->size; i++) 
           {
-              AST_T* col_ast = (AST_T*)ast->left->right->children->items[0];
-              char* col_s = as_f(col_ast, list);
-              char* total_cols_s = as_f(var->right, list);
-
-              const char* template_2d = 
-                  "%s"                       // Eval Value to store -> EAX
-                  "pushl %%eax\n"            // Save Value to stack
-                  "%s"                       // Eval Total Columns -> EAX
-                  "pushl %%eax\n"            // Save Total Columns
-                  "%s"                       // Eval Row Index -> EAX
-                  "popl %%ebx\n"             // EBX = Total Columns
-                  "imull %%ebx, %%eax\n"     // EAX = Row * Total_Columns
-                  "pushl %%eax\n"            // Save Flattened Row
-                  "%s"                       // Eval Col Index -> EAX
-                  "movl %%eax, %%ebx\n"      // EBX = Col Index
-                  "popl %%eax\n"             // EAX = Flattened Row
-                  "addl %%ebx, %%eax\n"      // EAX = Final Flat Index
-                  "movl %%eax, %%ebx\n"      // Move Flat Index to EBX
-                  
-                  "popl %%eax\n"             // Restore Value to store into EAX
-                  "movl %d(%%ebp), %%ecx\n"  // Load Array Base Pointer to ECX
-                  "movl %%eax, (%%ecx, %%ebx, 4)\n"; // WRITE TO MEMORY!
-
-              s = realloc(s, (strlen(val_s) + strlen(row_s) + strlen(col_s) + strlen(total_cols_s) + 512) * sizeof(char));
-              sprintf(s, template_2d, val_s, total_cols_s, row_s, col_s, var->int_value);
+              AST_T* dim_size_ast = (AST_T*)var->children->items[i];
+              char* dim_size_s = as_f(dim_size_ast, list);
               
-              free(col_s); free(total_cols_s);
-          }
-          // IS IT A 1D ARRAY WRITE?
-          else 
-          {
-              const char* template_1d = 
-                  "%s"                       
+              AST_T* idx_ast = (AST_T*)((AST_T*)access_node->children->items[i])->children->items[0];
+              char* idx_s = as_f(idx_ast, list);
+              
+              const char* loop_template = 
                   "pushl %%eax\n"            
                   "%s"                       
                   "movl %%eax, %%ebx\n"      
                   "popl %%eax\n"             
-                  "movl %d(%%ebp), %%ecx\n"  
-                  "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
-
-              s = realloc(s, (strlen(val_s) + strlen(row_s) + 256) * sizeof(char));
-              sprintf(s, template_1d, val_s, row_s, var->int_value);
+                  "imull %%ebx, %%eax\n"     
+                  "pushl %%eax\n"            
+                  "%s"                       
+                  "movl %%eax, %%ebx\n"      
+                  "popl %%eax\n"             
+                  "addl %%ebx, %%eax\n";     
+                  
+              char* temp_buf = calloc(strlen(dim_size_s) + strlen(idx_s) + strlen(loop_template) + 1, sizeof(char));
+              sprintf(temp_buf, loop_template, dim_size_s, idx_s);
+              s = realloc(s, strlen(s) + strlen(temp_buf) + 1);
+              strcat(s, temp_buf);
+              free(dim_size_s); free(idx_s); free(temp_buf);
           }
 
-          free(val_s); free(row_s);
+          //write to Memory
+          const char* final_assign = 
+              "movl %%eax, %%ebx\n"       
+              "popl %%eax\n"             // Restore Value to store
+              "movl %d(%%ebp), %%ecx\n"  
+              "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
+              
+          char* final_buf = calloc(strlen(final_assign) + 64, sizeof(char));
+          sprintf(final_buf, final_assign, var->int_value);
+          s = realloc(s, strlen(s) + strlen(final_buf) + 1);
+          strcat(s, final_buf);
+          free(final_buf);
+
           return s;
       }
-      // --- END OF ARRAY ASSIGNMENT LOGIC ---
-
-      // --- STANDARD VARIABLE ASSIGNMENT (=, +=, -=, etc) ---
       AST_T* existing_var = var_lookup(list, ast->name);
       
       if (!existing_var) {
@@ -638,12 +617,9 @@ char* as_f_variable(AST_T* ast, list_T* list)
     exit(1);
   }
 
-  // CRITICAL: Ensure we use the parentheses () around %ebp
-  // This tells the CPU: "Go to this memory address and get the VALUE."
   const char* template = "    movl %d(%%ebp), %%eax\n"; 
   char* s = calloc(strlen(template) + 32, sizeof(char));
   
-  // var->int_value should be -4, -8, etc.
   sprintf(s, template, var->int_value);
 
   return s;
@@ -651,7 +627,6 @@ char* as_f_variable(AST_T* ast, list_T* list)
 
 char* as_f_int(AST_T* ast, list_T* list)
 {
-  // Standardization: Load the integer directly into EAX
   const char* template = "movl $%d, %%eax\n";
   char* s = calloc(strlen(template) + 128, sizeof(char));
   sprintf(s, template, ast->int_value);
@@ -731,7 +706,6 @@ const char* asm_builtins =
 "    pushl %esi\n"                        
 "    movl current_input_ptr, %esi\n"      
 "    movl %esi, %ecx\n"                   
-
 // --- Phase 1: Skip leading whitespace (spaces, tabs, newlines) ---
 ".L_skip_ws:\n"
 "    movl $3, %eax\n"                     // sys_read
@@ -742,7 +716,6 @@ const char* asm_builtins =
 "    jne .L_read_done\n"                  // EOF or Error
 "    cmpb $32, (%ecx)\n"                  // Is the char <= 32? (Space is 32, \n is 10, \t is 9)
 "    jle .L_skip_ws\n"                    // If it's whitespace, loop and overwrite it!
-
 // --- Phase 2: Read the actual word/number ---
 "    incl %ecx\n"                         // We found a real character! Move pointer forward.
 ".L_read_word:\n"
@@ -756,7 +729,6 @@ const char* asm_builtins =
 "    jle .L_read_done\n"                  // YES! We reached the end of the word. Break loop.
 "    incl %ecx\n"                         // NO! It's part of the word. Keep it and move forward.
 "    jmp .L_read_word\n"                  
-
 ".L_read_done:\n"
 "    movb $0, (%ecx)\n"                   // Null-terminate the string
 "    incl %ecx\n"                         
@@ -765,7 +737,6 @@ const char* asm_builtins =
 "    popl %esi\n"
 "    popl %ebp\n"
 "    ret\n"
-
 // Add this right below your current "builtin_input" block
 ".globl input_line\n"
 "builtin_input_line:\n"
@@ -793,7 +764,6 @@ const char* asm_builtins =
 "    popl %esi\n"
 "    popl %ebp\n"
 "    ret\n"
-
 // --- Convert String to Int ---
 "builtin_to_int:\n"
 "    pushl %ebp\n"
@@ -804,14 +774,12 @@ const char* asm_builtins =
 "    xorl %eax, %eax\n"          // %eax will be our final result. Set to 0.
 "    xorl %ebx, %ebx\n"          // %ebx will hold the current character. Set to 0.
 "    xorl %ecx, %ecx\n"          // %ecx will be our 'is negative' flag. Set to 0.
-
 // 1. Check if the string starts with a minus sign '-'
 "    movb (%esi), %bl\n"         // Read the first character
 "    cmpb $45, %bl\n"            // Is it '-' (ASCII 45)?
 "    jne .L_to_int_loop\n"       // If not, jump straight to the loop
 "    movl $1, %ecx\n"            // It IS negative! Set our flag to 1
 "    incl %esi\n"                // Move the pointer past the '-' character
-
 // 2. The Conversion Loop
 ".L_to_int_loop:\n"
 "    movb (%esi), %bl\n"         // Read the next character
@@ -824,22 +792,18 @@ const char* asm_builtins =
 "    jl .L_to_int_skip\n"        // Invalid char, skip it
 "    cmpb $57, %bl\n"            // Is it greater than '9'?
 "    jg .L_to_int_skip\n"        // Invalid char, skip it
-
 // It is a valid number! Math time: (Result * 10) + (char - '0')
 "    subb $48, %bl\n"            // Convert ASCII character to real number ('5' -> 5)
 "    imull $10, %eax\n"          // Multiply current total by 10
 "    addl %ebx, %eax\n"          // Add the new digit
-
 ".L_to_int_skip:\n"
 "    incl %esi\n"                // Move pointer to the next character
 "    jmp .L_to_int_loop\n"       // Loop back around
-
 // 3. Finalize and Return
 ".L_to_int_done:\n"
 "    testl %ecx, %ecx\n"         // Check our negative flag
 "    jz .L_to_int_exit\n"        // If it's 0, just exit
 "    negl %eax\n"                // If it's 1, negate %eax to make it a negative number!
-
 ".L_to_int_exit:\n"
 "    popl %ebx\n"                // Restore registers
 "    popl %esi\n"
@@ -847,11 +811,11 @@ const char* asm_builtins =
 "    popl %ebp\n"
 "    ret\n";                      // Return the integer in %eax!
 
+
 char* as_f_call(AST_T* ast, list_T* list)
 {
   char* s = calloc(1, sizeof(char));
 
-  // Determine where the arguments live (handles varying AST structures)
   list_T* args = NULL;
   if (ast->value && ast->value->children) {
       args = ast->value->children;
@@ -859,7 +823,6 @@ char* as_f_call(AST_T* ast, list_T* list)
       args = ast->children;
   }
 
-  // Handle return
   if (strcmp(ast->name, "return") == 0)
   {
     AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
@@ -872,7 +835,6 @@ char* as_f_call(AST_T* ast, list_T* list)
     sprintf(s, template, val_s);
     free(val_s);
   }
-  // Handle Smart Print (Python style!)
   else if (strcmp(ast->name, "print") == 0)
   {
     if (args) {
@@ -882,19 +844,15 @@ char* as_f_call(AST_T* ast, list_T* list)
             
             int is_string = 0; 
             
-            // 1. Detect if it's a literal string "hello"
             if (arg->type == AST_STRING) {
                 is_string = 1; 
             } 
-            // 2. Detect if it's a direct function call like print(input())
             else if (arg->type == AST_CALL && arg->name && strcmp(arg->name, "input") == 0) {
                 is_string = 1;
             }
-            // 3. Detect if it's a variable
             else if (arg->type == AST_VARIABLE) {
                 AST_T* var = var_lookup(list, arg->name);
                 if (var) {
-                    // Check if defined as string (Type 2) OR if it holds a string pointer
                     if (var->data_type == 2 || var->type == AST_STRING) {
                         is_string = 1;
                     }
@@ -935,22 +893,16 @@ char* as_f_call(AST_T* ast, list_T* list)
     s = realloc(s, (strlen(s) + strlen(template) + 1) * sizeof(char));
     strcat(s, template);
   }
-  // Handle Python-style int(string)
   else if (strcmp(ast->name, "to_int") == 0)
   {
     AST_T* first_arg = args && args->size > 0 ? (AST_T*) args->items[0] : (ast->value ? ast->value : NULL);
 
-    // --- NEW: The Anti-Segfault Guardrail ---
-    // If the user literally typed to_int(123), stop the compiler right now!
     if (first_arg != NULL && first_arg->type == AST_INT) {
         printf("\n[Semantic Error]: Invalid argument for 'to_int()'.\n");
         printf("  -> You passed an integer literal, but it expects a string.\n");
         printf("  -> Hint: Use quotes! Did you mean \"123\" instead of 123?\n");
         exit(1); 
     }
-    // ----------------------------------------
-
-    // If it is a string, generate the assembly normally!
     char* val_s = as_f(first_arg, list);
     const char* template = "%s" 
                            "pushl %%eax\n"    
@@ -961,10 +913,8 @@ char* as_f_call(AST_T* ast, list_T* list)
     sprintf(s, template, val_s);
     free(val_s);
   }
-  // --- NEW: Handle Custom Functions ---
   else 
   {
-    // 1. Evaluate and PUSH arguments in reverse order
     if (args) {
         for (int i = args->size - 1; i >= 0; i--) {
             AST_T* arg = (AST_T*) args->items[i];
@@ -983,7 +933,6 @@ char* as_f_call(AST_T* ast, list_T* list)
         }
     }
 
-    // 2. Call the function and clean up the stack
     const char* call_template = "call %s\n"
                                 "addl $%d, %%esp\n"; // Stack cleanup!
                                 
@@ -1043,64 +992,68 @@ char* as_f_access(AST_T* ast, list_T* list)
         exit(1);
     }
 
-    // 1. Evaluate the Row Index
-    AST_T* row_ast = (AST_T*)ast->value->children->items[0];
-    char* row_s = as_f(row_ast, list);
+    char* s = calloc(1, sizeof(char));
 
-    char* s;
+    // 1. Evaluate the very first Index (i0)
+    AST_T* first_index_ast = (AST_T*)((AST_T*)ast->children->items[0])->children->items[0];
+    char* first_idx_s = as_f(first_index_ast, list);
+    
+    s = realloc(s, strlen(first_idx_s) + 1);
+    strcpy(s, first_idx_s);
+    free(first_idx_s);
 
-    // --- 2D ARRAY ACCESS ---
-    if (ast->right != NULL) 
+    // 2. Loop through the remaining dimensions to build the Flat Index!
+    for (unsigned int i = 1; i < ast->children->size; i++) 
     {
-        AST_T* col_ast = (AST_T*)ast->right->children->items[0];
-        char* col_s = as_f(col_ast, list);
+        // Get D_i (the size of this dimension from the symbol table)
+        AST_T* dim_size_ast = (AST_T*)var->children->items[i];
+        char* dim_size_s = as_f(dim_size_ast, list);
         
-        // Retrieve the Total Columns expression we saved in the Symbol Table!
-        char* total_cols_s = as_f(var->right, list);
-
-        const char* template_2d = 
-            "%s"                        // 1. Eval Total Columns -> EAX
-            "pushl %%eax\n"             // 2. Save Total Columns to stack
-            "%s"                        // 3. Eval Row Index -> EAX
-            "popl %%ebx\n"              // 4. Pop Total Columns into EBX
-            "imull %%ebx, %%eax\n"      // 5. EAX = Row * Total_Columns
-            "pushl %%eax\n"             // 6. Save Flattened Row to stack
-            "%s"                        // 7. Eval Col Index -> EAX
-            "movl %%eax, %%ebx\n"       // 8. Move Col Index to EBX
-            "popl %%eax\n"              // 9. Restore Flattened Row to EAX
-            "addl %%ebx, %%eax\n"       // 10. EAX = (Row * Total_Columns) + Col
-            "movl %%eax, %%ebx\n"       // 11. Move Final Flat Index to EBX
+        // Get i_i (the current accessed index)
+        AST_T* idx_ast = (AST_T*)((AST_T*)ast->children->items[i])->children->items[0];
+        char* idx_s = as_f(idx_ast, list);
+        
+        const char* loop_template = 
+            "pushl %%eax\n"            // Save current flat index
+            "%s"                       // Eval D_i -> EAX
+            "movl %%eax, %%ebx\n"      // Move D_i to EBX
+            "popl %%eax\n"             // Restore flat index
+            "imull %%ebx, %%eax\n"     // flat = flat * D_i
+            "pushl %%eax\n"            // Save new flat index
+            "%s"                       // Eval i_i -> EAX
+            "movl %%eax, %%ebx\n"      // Move i_i to EBX
+            "popl %%eax\n"             // Restore flat index
+            "addl %%ebx, %%eax\n";     // flat = flat + i_i
             
-            "movl %d(%%ebp), %%eax\n"   // 12. Load Array Base Pointer to EAX
-            "movl (%%eax, %%ebx, 4), %%eax\n"; // 13. READ FROM MEMORY!
-
-        s = calloc(strlen(row_s) + strlen(col_s) + strlen(total_cols_s) + 512, sizeof(char));
-        sprintf(s, template_2d, total_cols_s, row_s, col_s, var->int_value);
+        char* temp_buf = calloc(strlen(dim_size_s) + strlen(idx_s) + strlen(loop_template) + 1, sizeof(char));
+        sprintf(temp_buf, loop_template, dim_size_s, idx_s);
         
-        free(col_s); free(total_cols_s);
-    }
-    // --- 1D ARRAY ACCESS (Fallback) ---
-    else 
-    {
-        s = calloc(strlen(row_s) + 256, sizeof(char));
-        sprintf(s, 
-            "%s"                        
-            "movl %%eax, %%ebx\n"       
-            "movl %d(%%ebp), %%eax\n"   
-            "movl (%%eax, %%ebx, 4), %%eax\n", 
-            row_s, var->int_value
-        );
+        s = realloc(s, strlen(s) + strlen(temp_buf) + 1);
+        strcat(s, temp_buf);
+        
+        free(dim_size_s); free(idx_s); free(temp_buf);
     }
 
-    free(row_s);
+    // 3. Multiply flat index by 4 (bytes) and READ from memory
+    const char* final_access = 
+        "movl %%eax, %%ebx\n"       
+        "movl %d(%%ebp), %%eax\n"   
+        "movl (%%eax, %%ebx, 4), %%eax\n"; 
+        
+    char* final_buf = calloc(strlen(final_access) + 64, sizeof(char));
+    sprintf(final_buf, final_access, var->int_value);
+    
+    s = realloc(s, strlen(s) + strlen(final_buf) + 1);
+    strcat(s, final_buf);
+    free(final_buf);
+
     return s;
 }
 
-//I am using this function to find all local variables and assign them stack offsets before codegen. This way, when we encounter an assignment to a new variable anywhere in the function, we can assign it a unique stack offset and store that in the AST node. Then, when we access that variable later, we can generate the correct assembly to read/write from that stack offset.
+
 void hoist_local_variables(AST_T* ast, list_T* list) {
     if (!ast) return;
 
-    // 1. If we find an assignment, register the variable!
     if (ast->type == AST_ASSIGNMENT && ast->name) {
         if (!var_lookup(list, ast->name)) {
             AST_T* local_var = init_ast(AST_VARIABLE);
@@ -1108,41 +1061,30 @@ void hoist_local_variables(AST_T* ast, list_T* list) {
             local_var->int_value = current_local_offset; 
             current_local_offset -= 4; 
             
-            // --- Smart Type Inference ---
             local_var->data_type = ast->data_type; // Default to what the user asked for
             
-            // Override: If assigning from input(), force it to be a String (Type 2)
             if (ast->value && ast->value->type == AST_CALL && ast->value->name) {
                 if (strcmp(ast->value->name, "input") == 0 || strcmp(ast->value->name, "input_line") == 0) {
                     local_var->data_type = 2; // 2 = String
                 }
             }
-            // Optional: If assigning directly to a literal string (msg = "hello")
             else if (ast->value && ast->value->type == AST_STRING) {
                 local_var->data_type = 2;
             }
-            // ---------------------------------
-            
-            // --- NEW: SAVE THE 2D ARRAY COLUMN SIZE ---
-            // If the user did `arr:int[5][10]`, the parser saved '10' in ast->value->right.
-            // We copy it to the local variable so the backend can find it later!
+
             if (ast->value && ast->value->type == AST_ARRAY_ALLOC) {
-                local_var->right = ast->value->right; 
+                local_var->children = ast->value->children; 
             }
-            // ------------------------------------------
 
             list_push(list, local_var);
         }
     }
 
-    // 2. Traverse down all possible AST branches to find hidden assignments
     if (ast->value) hoist_local_variables(ast->value, list);
     
-    // (If your AST_T struct uses left/right for binary trees or loop conditions)
     if (ast->left) hoist_local_variables(ast->left, list);
     if (ast->right) hoist_local_variables(ast->right, list);
 
-    // 3. Traverse down into 'children' (Block statements)
     if (ast->children) {
         for (unsigned int i = 0; i < ast->children->size; i++) {
             hoist_local_variables((AST_T*)ast->children->items[i], list);
@@ -1163,9 +1105,7 @@ char* as_f(AST_T* ast, list_T* list) {
     case AST_WHILE:      return as_f_while(ast, list);
     case AST_FOR:        return as_f_for(ast, list);
     case AST_IF:         return as_f_if(ast, list);
-
     case AST_STRING:     return as_f_string(ast, list); 
-
     case AST_ARRAY:      return as_f_array(ast, list);
     case AST_ACCESS:     return as_f_access(ast, list);
     case AST_ARRAY_ALLOC: return as_f_array_alloc(ast, list);
@@ -1175,12 +1115,10 @@ char* as_f(AST_T* ast, list_T* list) {
 
 
 char* as_f_array(AST_T* ast, list_T* list) {
-    // 1. Calculate how much memory we need (4 bytes per item)
     int array_size = ast->children->size * 4;
     
     char* s = calloc(1024, sizeof(char));
     
-    // 2. Grab memory from our custom Heap!
     sprintf(s, 
         "movl heap_ptr, %%eax\n"        // Get the current free memory address
         "movl %%eax, %%edi\n"           // Save a copy of it in %edi
@@ -1188,7 +1126,6 @@ char* as_f_array(AST_T* ast, list_T* list) {
         array_size
     );
 
-    // 3. Evaluate each item and slot it into the array's memory
     for (int i = 0; i < ast->children->size; i++) {
         AST_T* child = (AST_T*)ast->children->items[i];
         char* child_s = as_f(child, list);
@@ -1205,14 +1142,12 @@ char* as_f_array(AST_T* ast, list_T* list) {
         free(child_s); free(store_s);
     }
     
-    // 4. Put the Array's Base Pointer back into %eax so it can be saved to the variable
     strcat(s, "movl %edi, %eax\n");
     return s;
 }
 
 
 char* as_f_array_alloc(AST_T* ast, list_T* list) {
-    // ast->value contains the size (e.g., 20). It could even be a variable!
     char* size_s = as_f(ast->value, list);
     char* s = calloc(strlen(size_s) + 256, sizeof(char));
     

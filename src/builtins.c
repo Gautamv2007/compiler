@@ -13,27 +13,18 @@ char* mkstr(const char* str)
 
 AST_T* fptr_print(visitor_T* visitor, AST_T* node, list_T* list)
 {
-  // 1. Create the new CALL node for the backend
   AST_T* ast = init_ast(AST_CALL);
   ast->name = mkstr("print");
 
-  // 2. The 'list' parameter contains our raw parser arguments.
-  // We need to visit them and deep copy them into our new ast's children list.
   if (list != NULL)
   {
       for (size_t i = 0; i < list->size; i++) 
       {
           AST_T* original_arg = (AST_T*)list->items[i];
           AST_T* visited_arg = visitor_visit(visitor, original_arg, list);
-          
           list_push(ast->children, visited_arg);
       }
   }
-
-  // Note: if your backend also explicitly checks ast->value for the first argument, 
-  // you might want to set it here like: 
-  // if (ast->children->size > 0) ast->value = ast->children->items[0];
-
   return ast;
 }
 

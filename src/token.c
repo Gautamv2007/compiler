@@ -48,7 +48,6 @@ char* token_to_str(token_T* token)
 {
   const char* type_str = token_type_to_str(token->type);
   const char* template = "<type=`%s`, int_type=`%d`, value=`%s`>";
-  // Check for null value to avoid segfaults on EOF
   const char* val = token->value ? token->value : "NULL";
 
   char* str = calloc(strlen(type_str) + strlen(template) + strlen(val) + 16, sizeof(char));
