@@ -96,7 +96,35 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     sprintf(s, template, left_s, right_s);
 
     // Math Operators
-    if (strcmp(ast->op, "+") == 0) {
+    char* op_s = calloc(512, sizeof(char));
+
+    if (strcmp(ast->op, "&&") == 0) {
+        sprintf(op_s, 
+            "cmp $0, %%ebx\n"      // Check if Left (%ebx) is 0
+            "setne %%bl\n"         // Set %bl to 1 if NOT equal to 0
+            "movzbl %%bl, %%ebx\n" // Zero-extend %bl to the full %ebx register
+
+            "cmp $0, %%eax\n"      // Check if Right (%eax) is 0
+            "setne %%al\n"         // Set %al to 1 if NOT equal to 0
+            "movzbl %%al, %%eax\n" // Zero-extend %al to the full %eax register
+
+            "andl %%ebx, %%eax\n"  // Now do the AND. Result (0 or 1) is in %eax!
+        );
+    } 
+    else if (strcmp(ast->op, "||") == 0) {
+        sprintf(op_s, 
+            "cmp $0, %%ebx\n"
+            "setne %%bl\n"
+            "movzbl %%bl, %%ebx\n"
+
+            "cmp $0, %%eax\n"
+            "setne %%al\n"
+            "movzbl %%al, %%eax\n"
+
+            "orl %%ebx, %%eax\n"   // Now do the OR. Result (0 or 1) is in %eax!
+        );
+    }
+    else if (strcmp(ast->op, "+") == 0) {
         strcat(s, "addl %ebx, %eax\n");
     } 
     else if (strcmp(ast->op, "-") == 0) {
@@ -264,6 +292,94 @@ char* as_f_while(AST_T* ast, list_T* list) {
 
     free(condition_s);
     free(body_s);
+    return s;
+}
+
+
+char* as_f_for(AST_T* ast, list_T* list) {
+    static int for_label_count = 0;
+    int label = for_label_count++;
+    
+    // --- NEW OFFSET CALCULATION ---
+    int offset = 0;
+    int found = 0;
+    
+    // Loop through the backend's variable list to find 'i'
+    for (int i = 0; i < list->size; i++) {
+        AST_T* v = (AST_T*)list->items[i];
+        if (v->name && strcmp(v->name, ast->name) == 0) {
+            // Found it! Calculate x86 stack offset: -4, -8, -12, etc.
+            offset = (i + 1) * -4; 
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("[Compiler Error]: For-loop variable '%s' is not defined!\n", ast->name);
+        exit(1);
+    }
+    
+    // // Debug print to verify it worked!
+    // printf("[DEBUG BACKEND]: Loop variable '%s' is safely at memory offset: %d\n", ast->name, offset);
+    // // ------------------------------
+
+    // 2. Generate assembly for the pieces
+    char* start_s = as_f(ast->left, list);       
+    char* end_s = as_f(ast->right, list);        
+    char* increment_s = as_f(ast->value, list);  
+    char* body_s = as_f_compound(ast, list);     
+
+    // 3. Determine if we are counting UP or DOWN
+    // We default to jge (Jump if Greater or Equal) for positive increments
+    char* jump_instruction = "jge"; 
+    
+    // If the increment is a negative integer (e.g., -1), switch to jle (Jump if Less or Equal)
+    if (ast->value && ast->value->type == AST_INT && ast->value->int_value < 0) {
+        jump_instruction = "jle";
+    }
+
+    // 4. Allocate memory and stitch it together
+    char* s = calloc(strlen(start_s) + strlen(end_s) + strlen(body_s) + strlen(increment_s) + 1024, sizeof(char));
+
+    sprintf(s, 
+        // --- INITIALIZATION ---
+        "%s"                            
+        "movl %%eax, %d(%%ebp)\n"       
+
+        // --- LOOP START LABEL ---
+        ".L_FOR_START_%d:\n"
+
+        // --- CONDITION CHECK ---
+        "%s"                            
+        "cmpl %%eax, %d(%%ebp)\n"       
+        "%s .L_FOR_END_%d\n"            // <-- NEW: Injects 'jge' or 'jle' dynamically!
+
+        // --- LOOP BODY ---
+        "%s"                            
+
+        // --- INCREMENT ---
+        "%s"                            
+        "addl %%eax, %d(%%ebp)\n"       // <-- IF LOOP IS STUCK, 'offset' IS LIKELY WRONG HERE
+
+        // --- REPEAT ---
+        "jmp .L_FOR_START_%d\n"         
+
+        // --- LOOP EXIT LABEL ---
+        ".L_FOR_END_%d:\n",             
+
+        // Variables mapped exactly to the %s and %d slots above:
+        start_s, offset, 
+        label, 
+        end_s, offset, 
+        jump_instruction, label,        // The dynamic jump!
+        body_s, 
+        increment_s, offset, 
+        label, 
+        label
+    );
+
+    free(start_s); free(end_s); free(increment_s); free(body_s);
     return s;
 }
 
@@ -982,7 +1098,6 @@ void hoist_local_variables(AST_T* ast, list_T* list) {
     }
 }
 
-
 char* as_f(AST_T* ast, list_T* list) {    
   if (!ast) return calloc(1, sizeof(char));
   
@@ -994,6 +1109,7 @@ char* as_f(AST_T* ast, list_T* list) {
     case AST_INT:        return as_f_int(ast, list);
     case AST_BINOP:      return as_f_binop(ast, list);
     case AST_WHILE:      return as_f_while(ast, list);
+    case AST_FOR:        return as_f_for(ast, list);
     case AST_IF:         return as_f_if(ast, list);
 
     case AST_STRING:     return as_f_string(ast, list); 

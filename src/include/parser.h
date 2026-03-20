@@ -31,4 +31,8 @@ AST_T* parser_parse_expr(parser_T* parser);
 
 AST_T* parser_parse_compound(parser_T* parser);
 
+AST_T* parser_parse_for(parser_T* parser, list_T* list);
+
+AST_T* parser_parse_logical(parser_T* parser);
+
 #endif

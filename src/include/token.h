@@ -38,8 +38,12 @@ typedef struct TOKEN_STRUCT
     TOKEN_MOD_EQUALS,
     TOKEN_EQUALS_EQUALS,
     TOKEN_WHILE,
+    TOKEN_FOR,
     TOKEN_IF,
     TOKEN_ELSE,
+    TOKEN_ELIF,
+    TOKEN_AND,
+    TOKEN_OR,
     TOKEN_RETURN,
     TOKEN_EOF
   } type;

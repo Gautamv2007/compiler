@@ -1,0 +1,9 @@
+{
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/gautam/new_compiler/compiler",
+            "binaryPath": "/home/gautam/new_compiler/compiler/gvr.out",
+            "binaryArgs": []
+        }
+    ]
+}

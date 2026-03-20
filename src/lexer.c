@@ -64,7 +64,9 @@ token_T* lexer_parse_id(lexer_T* lexer)
 
   // Keyword checks
   if (strcmp(value, "while") == 0) return init_token(value, TOKEN_WHILE);
+  if (strcmp(value, "for") == 0) return init_token(value, TOKEN_FOR);
   if (strcmp(value, "if") == 0) return init_token(value, TOKEN_IF);
+  if (strcmp(value, "elif") == 0) return init_token(value, TOKEN_ELIF);
   if (strcmp(value, "else") == 0) return init_token(value, TOKEN_ELSE);
   if (strcmp(value, "return") == 0) return init_token(value, TOKEN_RETURN);
   
@@ -178,6 +180,24 @@ token_T* lexer_next_token(lexer_T* lexer)
           }
           return lexer_advance_current(lexer, TOKEN_GT);
       }
+      // Inside your lexer loop/switch:
+
+      case '&':
+          if (lexer_peek(lexer, 1) == '&') {
+              lexer_advance(lexer); // consume first '&'
+              lexer_advance(lexer); // consume second '&'
+              return init_token("&&", TOKEN_AND); // Define TOKEN_AND in token.h
+          }
+          // Handle single '&' if you want bitwise operators later
+          break;
+
+      case '|':
+          if (lexer_peek(lexer, 1) == '|') {
+              lexer_advance(lexer); // consume first '|'
+              lexer_advance(lexer); // consume second '|'
+              return init_token("||", TOKEN_OR); // Define TOKEN_OR in token.h
+          }
+          break;
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
       case ';': return lexer_advance_current(lexer, TOKEN_SEMI);

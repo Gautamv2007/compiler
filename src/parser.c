@@ -43,6 +43,39 @@ AST_T* parser_parse_factor(parser_T* parser) {
     switch (parser->token->type) {
         case TOKEN_ID:      return parser_parse_id(parser);
         case TOKEN_INT:     return parser_parse_int(parser);
+
+        case TOKEN_MINUS: {
+            parser_eat(parser, TOKEN_MINUS);
+            
+            // Parse whatever comes after the minus sign (number, variable, etc.)
+            AST_T* right_node = parser_parse_factor(parser);
+
+            // OPTIMIZATION (Constant Folding): 
+            // If it's a raw number, just flip the sign natively.
+            // This ensures our for-loop still sees a pure negative integer!
+            if (right_node->type == AST_INT) {
+                right_node->int_value = -right_node->int_value;
+                return right_node;
+            }
+
+            // THE COMPILER TRICK: 
+            // If it's a variable (like -i) or expression (like -(x+2)), 
+            // secretly rewrite it as "0 - i" for the backend.
+            AST_T* zero_node = init_ast(AST_INT);
+            zero_node->int_value = 0;
+
+            AST_T* ast = init_ast(AST_BINOP);
+            ast->left = zero_node;
+            
+            // Set the operator to "-"
+            ast->op = calloc(2, sizeof(char));
+            strcpy(ast->op, "-");
+            
+            ast->right = right_node;
+            
+            return ast;
+        }
+
         case TOKEN_LPAREN: {
             // Use your existing list parser to handle the parentheses!
             // It will read the inside, and if it sees an arrow `->`, it will 
@@ -167,17 +200,32 @@ AST_T* parser_parse_expr(parser_T* parser) {
         // The main 'if' body
         ast->left = parser_parse_block(parser); 
 
-        // The optional 'else' body
-        if (parser->token->type == TOKEN_ELSE) {
+        // --- NEW: The 'elif' chain ---
+        if (parser->token->type == TOKEN_ELIF) {
+            
+            // 1. Spoof the token! Change ELIF to IF so the next cycle parses it normally.
+            parser->token->type = TOKEN_IF;
+            
+            // 2. Recursively parse the new 'if' statement and attach it to the false branch.
+            // IMPORTANT: Change `parser_parse_expr` to whatever function this code is currently inside!
+            ast->right = parser_parse_expr(parser); 
+            
+        } 
+        // --- Existing 'else' body ---
+        else if (parser->token->type == TOKEN_ELSE) {
             parser_eat(parser, TOKEN_ELSE);
             ast->right = parser_parse_block(parser);
         } else {
-            ast->right = NULL; // Explicitly set to NULL if there is no else
+            ast->right = NULL; // Explicitly set to NULL if there is no else/elif
         }
         
         return ast;
     }
     // --------------------------------------
+    if (parser->token->type == TOKEN_FOR) {
+        // We pass NULL for the list since we removed its dependency inside the function!
+        return parser_parse_for(parser, NULL); 
+    }
 
     // Check for "return"
     if (parser->token->type == TOKEN_RETURN) {
@@ -191,7 +239,8 @@ AST_T* parser_parse_expr(parser_T* parser) {
     }
     
     // Top precedence is comparison (which delegates down to math)
-    return parser_parse_comparison(parser);
+// Top precedence is logical (which delegates to comparison, then math)
+    return parser_parse_logical(parser);
 }
 
 AST_T* parser_parse(parser_T* parser)
@@ -496,4 +545,60 @@ AST_T* parser_parse_compound(parser_T* parser)
     parser_eat(parser, TOKEN_RBRACE);
 
   return compound;
+}
+
+
+AST_T* parser_parse_for(parser_T* parser, list_T* list) { 
+    AST_T* ast = init_ast(AST_FOR); 
+    
+    parser_eat(parser, TOKEN_FOR);
+    parser_eat(parser, TOKEN_LPAREN);
+
+    // 1. Variable Name
+    ast->name = strdup(parser->token->value); 
+    parser_eat(parser, TOKEN_ID);
+    parser_eat(parser, TOKEN_COMMA);
+
+    // 2. Start Value (Fixed: only passing 'parser')
+    ast->left = parser_parse_expr(parser); 
+    parser_eat(parser, TOKEN_COMMA);
+
+    // 3. End Value (Fixed: only passing 'parser')
+    ast->right = parser_parse_expr(parser);
+    parser_eat(parser, TOKEN_COMMA);
+
+    // 4. Increment Value (Fixed: only passing 'parser')
+    ast->value = parser_parse_expr(parser);
+    parser_eat(parser, TOKEN_RPAREN);
+
+    // 5. The Body { ... } 
+    AST_T* compound = parser_parse_compound(parser);
+    ast->children = compound->children; 
+
+    return ast;
+}
+
+
+// 5. Logical: Handles && and ||
+AST_T* parser_parse_logical(parser_T* parser) {
+    // 1. First, evaluate any comparisons (e.g., x == 1)
+    AST_T* left = parser_parse_comparison(parser);
+
+    // 2. Check if there is an AND or OR joining it to another comparison
+    while (parser->token->type == TOKEN_AND || 
+           parser->token->type == TOKEN_OR) 
+    {
+        token_T* op_token = parser->token;
+        parser_eat(parser, op_token->type);
+
+        AST_T* binop = init_ast(AST_BINOP);
+        binop->left = left;
+        binop->op = op_token->value; 
+        
+        // 3. Parse the right side of the && or ||
+        binop->right = parser_parse_comparison(parser);
+        
+        left = binop;
+    }
+    return left;
 }

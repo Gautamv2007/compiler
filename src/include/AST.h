@@ -21,6 +21,7 @@ typedef struct AST_STRUCT
     AST_BINOP,      // New: For +, -, *, /
     AST_IF,         // New: For conditionals
     AST_WHILE,      // New: For loops
+    AST_FOR,
     AST_NOOP,
   } type;
   

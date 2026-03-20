@@ -52,6 +52,7 @@ AST_T* visitor_visit(visitor_T* visitor, AST_T* node, list_T* list)
     // --- New Visitors ---
     case AST_BINOP:      return visitor_visit_binop(visitor, node, list);
     case AST_WHILE:      return visitor_visit_while(visitor, node, list);
+    case AST_FOR:        return visitor_visit_for(visitor, node, list);
     case AST_IF:         return visitor_visit_if(visitor, node, list);
 
     case AST_STRING:     return visitor_visit_string(visitor, node, list);
@@ -78,6 +79,47 @@ AST_T* visitor_visit_while(visitor_T* visitor, AST_T* node, list_T* list)
   // Body (usually stored in left for your structure)
   while_node->left = visitor_visit(visitor, node->left, list);
   return while_node;
+}
+
+AST_T* visitor_visit_for(visitor_T* visitor, AST_T* node, list_T* list)
+{
+    // 1. Create the new node to pass to the Backend
+    AST_T* for_node = init_ast(AST_FOR);
+
+    // 2. Copy the variable name (e.g., "i" or "var")
+    if (node->name) {
+        for_node->name = node->name; 
+    }
+
+    // 3. Visit and copy the Start, End, and Increment values
+    if (node->left) {
+        for_node->left = visitor_visit(visitor, node->left, list);
+    }
+    if (node->right) {
+        for_node->right = visitor_visit(visitor, node->right, list);
+    }
+    if (node->value) {
+        for_node->value = visitor_visit(visitor, node->value, list);
+    }
+
+    // 4. DEEP COPY THE BODY: Loop through all the statements inside the { ... }
+    if (node->children) {
+        for (unsigned int i = 0; i < node->children->size; i++) {
+            AST_T* child = (AST_T*) node->children->items[i];
+            AST_T* visited_child = visitor_visit(visitor, child, list);
+            list_push(for_node->children, visited_child);
+        }
+    }
+
+    // // --- DEBUG PRINT ---
+    // printf("\n[DEBUG VISITOR]: Successfully visited FOR loop!\n");
+    // printf("  -> Variable Name : '%s'\n", for_node->name ? for_node->name : "NULL");
+    // printf("  -> Start Node Exists : %s\n", for_node->left ? "YES" : "NO");
+    // printf("  -> End Node Exists   : %s\n", for_node->right ? "YES" : "NO");
+    // printf("  -> Inc Node Exists   : %s\n", for_node->value ? "YES" : "NO");
+    // printf("  -> Body Statements   : %zu\n\n", for_node->children ? for_node->children->size : 0);
+    // // -------------------
+    return for_node;
 }
 
 AST_T* visitor_visit_compound(visitor_T* visitor, AST_T* node, list_T* list)

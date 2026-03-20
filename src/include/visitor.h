@@ -21,6 +21,7 @@ AST_T* visitor_visit_int(visitor_T* visitor, AST_T* node, list_T* list);
 AST_T* visitor_visit_access(visitor_T* visitor, AST_T* node, list_T* list);
 AST_T* visitor_visit_binop(visitor_T* visitor, AST_T* node, list_T* list);
 AST_T* visitor_visit_while(visitor_T* visitor, AST_T* node, list_T* list);
+AST_T* visitor_visit_for(visitor_T* visitor, AST_T* node, list_T* list);
 AST_T* visitor_visit_if(visitor_T* visitor, AST_T* node, list_T* list);
 AST_T* visitor_visit_string(visitor_T* visitor, AST_T* node, list_T* list);
 
