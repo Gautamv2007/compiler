@@ -1,9 +1,8 @@
 main = () -> {
-  x:int = 1;
-  y:int = 10;
   
-  if (x == 99 || y == 99) {
-    print(99); 
+  for (i:int = 0; i < 10; i += 2) {
+    print(i, "\n");
   }
+  
   return 0;
 }

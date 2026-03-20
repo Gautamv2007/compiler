@@ -554,26 +554,21 @@ AST_T* parser_parse_for(parser_T* parser, list_T* list) {
     parser_eat(parser, TOKEN_FOR);
     parser_eat(parser, TOKEN_LPAREN);
 
-    // 1. Variable Name
-    ast->name = strdup(parser->token->value); 
-    parser_eat(parser, TOKEN_ID);
-    parser_eat(parser, TOKEN_COMMA);
-
-    // 2. Start Value (Fixed: only passing 'parser')
+    // 1. Initialization (e.g., i:int = 0)
     ast->left = parser_parse_expr(parser); 
-    parser_eat(parser, TOKEN_COMMA);
+    parser_eat(parser, TOKEN_SEMI); // <-- CHANGED TO SEMICOLON
 
-    // 3. End Value (Fixed: only passing 'parser')
-    ast->right = parser_parse_expr(parser);
-    parser_eat(parser, TOKEN_COMMA);
-
-    // 4. Increment Value (Fixed: only passing 'parser')
+    // 2. Condition (e.g., i < 10)
     ast->value = parser_parse_expr(parser);
+    parser_eat(parser, TOKEN_SEMI); // <-- CHANGED TO SEMICOLON
+
+    // 3. Increment (e.g., i += 2)
+    ast->right = parser_parse_expr(parser);
     parser_eat(parser, TOKEN_RPAREN);
 
-    // 5. The Body { ... } 
-    AST_T* compound = parser_parse_compound(parser);
-    ast->children = compound->children; 
+    // 4. The Body { ... } 
+    AST_T* body_block = parser_parse_block(parser); 
+    ast->children = body_block->children; 
 
     return ast;
 }

@@ -299,87 +299,33 @@ char* as_f_while(AST_T* ast, list_T* list) {
 char* as_f_for(AST_T* ast, list_T* list) {
     static int for_label_count = 0;
     int label = for_label_count++;
+
+    // 1. Evaluate the three expressions natively!
+    char* init_s = as_f(ast->left, list);       // e.g., i = 0
+    char* cond_s = as_f(ast->value, list);      // e.g., i < 10
+    char* inc_s  = as_f(ast->right, list);      // e.g., i += 1
     
-    // --- NEW OFFSET CALCULATION ---
-    int offset = 0;
-    int found = 0;
-    
-    // Loop through the backend's variable list to find 'i'
-    for (int i = 0; i < list->size; i++) {
-        AST_T* v = (AST_T*)list->items[i];
-        if (v->name && strcmp(v->name, ast->name) == 0) {
-            // Found it! Calculate x86 stack offset: -4, -8, -12, etc.
-            offset = (i + 1) * -4; 
-            found = 1;
-            break;
-        }
-    }
+    // 2. Evaluate the body of the loop
+    char* body_s = as_f_compound(ast, list);    
 
-    if (!found) {
-        printf("[Compiler Error]: For-loop variable '%s' is not defined!\n", ast->name);
-        exit(1);
-    }
-    
-    // // Debug print to verify it worked!
-    // printf("[DEBUG BACKEND]: Loop variable '%s' is safely at memory offset: %d\n", ast->name, offset);
-    // // ------------------------------
+    // 3. Allocate space for the final string
+    size_t total_length = strlen(init_s) + strlen(cond_s) + strlen(body_s) + strlen(inc_s) + 256;
+    char* s = calloc(total_length, sizeof(char));
 
-    // 2. Generate assembly for the pieces
-    char* start_s = as_f(ast->left, list);       
-    char* end_s = as_f(ast->right, list);        
-    char* increment_s = as_f(ast->value, list);  
-    char* body_s = as_f_compound(ast, list);     
-
-    // 3. Determine if we are counting UP or DOWN
-    // We default to jge (Jump if Greater or Equal) for positive increments
-    char* jump_instruction = "jge"; 
-    
-    // If the increment is a negative integer (e.g., -1), switch to jle (Jump if Less or Equal)
-    if (ast->value && ast->value->type == AST_INT && ast->value->int_value < 0) {
-        jump_instruction = "jle";
-    }
-
-    // 4. Allocate memory and stitch it together
-    char* s = calloc(strlen(start_s) + strlen(end_s) + strlen(body_s) + strlen(increment_s) + 1024, sizeof(char));
-
-    sprintf(s, 
-        // --- INITIALIZATION ---
-        "%s"                            
-        "movl %%eax, %d(%%ebp)\n"       
-
-        // --- LOOP START LABEL ---
-        ".L_FOR_START_%d:\n"
-
-        // --- CONDITION CHECK ---
-        "%s"                            
-        "cmpl %%eax, %d(%%ebp)\n"       
-        "%s .L_FOR_END_%d\n"            // <-- NEW: Injects 'jge' or 'jle' dynamically!
-
-        // --- LOOP BODY ---
-        "%s"                            
-
-        // --- INCREMENT ---
-        "%s"                            
-        "addl %%eax, %d(%%ebp)\n"       // <-- IF LOOP IS STUCK, 'offset' IS LIKELY WRONG HERE
-
-        // --- REPEAT ---
-        "jmp .L_FOR_START_%d\n"         
-
-        // --- LOOP EXIT LABEL ---
-        ".L_FOR_END_%d:\n",             
-
-        // Variables mapped exactly to the %s and %d slots above:
-        start_s, offset, 
-        label, 
-        end_s, offset, 
-        jump_instruction, label,        // The dynamic jump!
-        body_s, 
-        increment_s, offset, 
-        label, 
-        label
+    // 4. Build the C-style flow control!
+    sprintf(s,
+        "%s\n"                  // 1. Run Initialization (runs exactly once)
+        ".L_FOR_START_%d:\n"    // 2. Start of the loop
+        "%s\n"                  // 3. Run Condition Check
+        "cmp $0, %%eax\n"       //    Is the condition False (0)?
+        "je .L_FOR_END_%d\n"    //    If False, jump out of the loop!
+        "%s\n"                  // 4. Run the Body
+        "%s\n"                  // 5. Run the Increment
+        "jmp .L_FOR_START_%d\n" // 6. Jump back up to the Condition
+        ".L_FOR_END_%d:\n",     // 7. Loop Exit Label
+        init_s, label, cond_s, label, body_s, inc_s, label, label
     );
 
-    free(start_s); free(end_s); free(increment_s); free(body_s);
     return s;
 }
 
