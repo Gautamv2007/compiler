@@ -196,6 +196,22 @@ token_T* lexer_next_token(lexer_T* lexer)
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
       case ';': return lexer_advance_current(lexer, TOKEN_SEMI);
       case '"': return lexer_collect_string(lexer);
+      case '\'': {
+          lexer_advance(lexer);      // Skip the opening quote
+          char char_val = lexer->c;  // Grab the actual letter (e.g., 'J')
+          lexer_advance(lexer);      // Move past the letter
+            
+          if (lexer->c == '\'') {
+              lexer_advance(lexer);  // Skip the closing quote
+          }
+
+            // Convert the character into a string so the token can hold it
+          char* val_str = calloc(2, sizeof(char));
+          val_str[0] = char_val;
+          val_str[1] = '\0';
+            
+          return init_token(val_str, TOKEN_CHAR);
+      }
       default: printf("[Lexer]: Unexpected character `%c`\n", lexer->c); exit(1);
     }
   }

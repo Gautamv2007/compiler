@@ -121,6 +121,18 @@ AST_T* parser_parse_factor(parser_T* parser) {
             parser_eat(parser, TOKEN_STRING);
             return ast;
         }
+
+        case TOKEN_CHAR: {
+            AST_T* char_node = init_ast(AST_INT);
+            
+            char_node->int_value = (int)parser->token->value[0]; 
+            
+            char_node->data_type = 5;
+            
+            parser_eat(parser, TOKEN_CHAR);
+            return char_node;
+        }
+
         default: 
             printf("[Parser]: Unexpected token in factor `%s`\n", token_to_str(parser->token)); 
             exit(1);
@@ -422,9 +434,22 @@ AST_T* parser_parse_id(parser_T* parser)
                 printf("\n[Semantic Error]: Variable '%s' already defined.\n", ast->name);
                 exit(1);
             }
-            if (assigned_type != 0 && assigned_type != existing_type) {
-                printf("\n[Semantic Error]: Cannot assign mismatching type to '%s'.\n", ast->name);
-                exit(1);
+            
+            // --- NEW: Safely check for NULLs! ---
+            int left_type = (ast->left != NULL) ? ast->left->data_type : 0;
+            int right_type = (ast->value != NULL) ? ast->value->data_type : 0;
+
+            // --- NEW: Ensure ast->left is NOT NULL before checking its type ---
+            if (ast->left != NULL && ast->left->type == AST_ACCESS && existing_type == 2 && (right_type == 1 || right_type == 5)) {
+                // It is a string index assignment! Let it pass!
+            }
+            else if (left_type != right_type) {
+                // Wait! For a standard assignment like `i = 0`, left_type will be 0. 
+                // We only want to throw an error if the types actually explicitly mismatch!
+                if (left_type != 0 && right_type != 0) {
+                    printf("\n[Semantic Error]: Cannot assign mismatching type to '%s'.\n", ast->name);
+                    exit(1);
+                }
             }
         }
     } 

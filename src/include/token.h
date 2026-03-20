@@ -21,6 +21,7 @@ typedef struct TOKEN_STRUCT
     TOKEN_GTE,
     TOKEN_ARROW_RIGHT,
     TOKEN_INT,
+    TOKEN_CHAR,
     TOKEN_STRING,
     TOKEN_KW_INT,
     TOKEN_KW_STR,

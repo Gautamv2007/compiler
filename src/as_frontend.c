@@ -369,21 +369,30 @@ char* as_f_assignment(AST_T* ast, list_T* list)
     current_local_offset = -4; 
     AST_T* as_val = ast->value;
 
+    // --- NEW: CREATE AN ISOLATED SYMBOL TABLE FOR THIS FUNCTION! ---
+    list_T* local_vars = init_list(sizeof(AST_T*));
+
     if (as_val->children) {
         for(unsigned int i = 0; i < as_val->children->size; i++)
         {
           AST_T* farg = (AST_T*) as_val->children->items[i];
-          if (!var_lookup(list, farg->name)) {
+          
+          // Use 'local_vars' instead of 'list'
+          if (!var_lookup(local_vars, farg->name)) {
               AST_T* arg_variable = init_ast(AST_VARIABLE);
               arg_variable->name = farg->name;
+              
+              // Parameters start at +8, +12, +16... (Above the Base Pointer!)
               arg_variable->int_value = 8 + (i * 4); 
               arg_variable->data_type = farg->data_type; 
-              list_push(list, arg_variable);
+              
+              list_push(local_vars, arg_variable);
           }
         }
     }
 
-    hoist_local_variables(ast->value, list);
+    // Hoist local variables into our isolated 'local_vars' sandbox!
+    hoist_local_variables(ast->value, local_vars);
     int stack_space_needed = (-current_local_offset) - 4; 
 
     const char* template = ".globl %s\n"
@@ -396,6 +405,7 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 
     AST_T* func_body = as_val->value; 
 
+    // [ ... Return Validation logic stays exactly the same ... ]
     if (func_body && func_body->children && func_body->children->size > 0) 
     {
         AST_T* last_stmt = (AST_T*) func_body->children->items[func_body->children->size - 1];
@@ -422,8 +432,9 @@ char* as_f_assignment(AST_T* ast, list_T* list)
             }
         }
     }
-    //generate Function Body
-    char* as_val_val = as_f(as_val->value, list);
+
+    // --- NEW: Generate the function body using the isolated 'local_vars'! ---
+    char* as_val_val = as_f(as_val->value, local_vars);
     
     const char* void_epilogue = "\n"
                                 "movl %ebp, %esp\n"
@@ -492,12 +503,21 @@ char* as_f_assignment(AST_T* ast, list_T* list)
               free(dim_size_s); free(idx_s); free(temp_buf);
           }
 
-          //write to Memory
-          const char* final_assign = 
-              "movl %%eax, %%ebx\n"       
-              "popl %%eax\n"             // Restore Value to store
-              "movl %d(%%ebp), %%ecx\n"  
-              "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
+          //write to Memory both character and integer arrays
+          const char* final_assign;
+          if (var->data_type == 2) { // Is it a String?
+              final_assign = 
+                  "movl %%eax, %%ebx\n"       
+                  "popl %%eax\n"             // Restore Value to store
+                  "movl %d(%%ebp), %%ecx\n"  
+                  "movb %%al, (%%ecx, %%ebx, 1)\n"; // Write ONE byte (AL) into memory
+          } else { // It's an Integer Array!
+              final_assign = 
+                  "movl %%eax, %%ebx\n"       
+                  "popl %%eax\n"             // Restore Value to store
+                  "movl %d(%%ebp), %%ecx\n"  
+                  "movl %%eax, (%%ecx, %%ebx, 4)\n"; // Write FOUR bytes
+          }
               
           char* final_buf = calloc(strlen(final_assign) + 64, sizeof(char));
           sprintf(final_buf, final_assign, var->int_value);
@@ -691,6 +711,21 @@ const char* asm_builtins =
 "    addl $16, %esp\n"
 "    popl %ebp\n"
 "    ret\n"
+// --- NEW: Print Character (Pure Linux Syscall) ---
+"builtin_print_char:\n"
+"    pushl %ebp\n"
+"    movl %esp, %ebp\n"
+"    subl $8, %esp\n"           // Allocate a tiny 8-byte buffer on the stack
+"    movl 8(%ebp), %eax\n"      // Get the character that was passed as an argument
+"    movb %al, -2(%ebp)\n"      // Put the character into our stack buffer
+"    movl $4, %eax\n"           // Syscall number 4 (sys_write)
+"    movl $1, %ebx\n"           // File descriptor 1 (stdout)
+"    leal -2(%ebp), %ecx\n"     // Pointer to our 2-byte buffer on the stack
+"    movl $2, %edx\n"           // Tell the OS to print exactly 2 bytes
+"    int $0x80\n"               // Trigger Linux OS interrupt!
+"    movl %ebp, %esp\n"
+"    popl %ebp\n"
+"    ret\n"
 // --- NEW: Dynamic Bump Allocator for Input ---
 ".section .bss\n"
 ".lcomm global_input_buffer, 1024\n"
@@ -843,8 +878,25 @@ char* as_f_call(AST_T* ast, list_T* list)
             char* val_s = as_f(arg, list);
             
             int is_string = 0; 
+            int is_char = 0; // --- NEW: Track if it's a character! ---
             
-            if (arg->type == AST_STRING) {
+            // 1. Check for Characters
+            if (arg->data_type == 5) {
+                is_char = 1; // It's a direct character literal like 'J'
+            }
+            else if (arg->type == AST_ACCESS) {
+                // It's an array access like msg[0]. Is the array a string?
+                // (Checking both arg->name and arg->left->name just to be safe with your AST structure)
+                const char* var_name = arg->name ? arg->name : (arg->left ? arg->left->name : NULL);
+                if (var_name) {
+                    AST_T* var = var_lookup(list, var_name);
+                    if (var && var->data_type == 2) { 
+                        is_char = 1; // Accessing an index of a string yields a char!
+                    }
+                }
+            }
+            // 2. Check for Strings
+            else if (arg->type == AST_STRING) {
                 is_string = 1; 
             } 
             else if (arg->type == AST_CALL && arg->name && strcmp(arg->name, "input") == 0) {
@@ -859,8 +911,15 @@ char* as_f_call(AST_T* ast, list_T* list)
                 }
             }
             
-            // Choose the right builtin
-            const char* func_to_call = is_string ? "builtin_print_str" : "builtin_print_int";
+            // 3. Choose the right builtin function!
+            const char* func_to_call;
+            if (is_string) {
+                func_to_call = "builtin_print_str";
+            } else if (is_char) {
+                func_to_call = "builtin_print_char"; // Route to our new char printer!
+            } else {
+                func_to_call = "builtin_print_int";
+            }
 
             const char* template = "%s" 
                                    "pushl %%eax\n"    
@@ -1034,11 +1093,21 @@ char* as_f_access(AST_T* ast, list_T* list)
         free(dim_size_s); free(idx_s); free(temp_buf);
     }
 
-    // 3. Multiply flat index by 4 (bytes) and READ from memory
-    const char* final_access = 
-        "movl %%eax, %%ebx\n"       
-        "movl %d(%%ebp), %%eax\n"   
-        "movl (%%eax, %%ebx, 4), %%eax\n"; 
+    // Access both string character and array elements. we are implementing a simple if else check
+    const char* final_access;
+    if (var->data_type == 2) { // Is it a String?
+        final_access = 
+            "movl %%eax, %%ebx\n"       
+            "movl %d(%%ebp), %%eax\n"   
+            "xorl %%ecx, %%ecx\n"             // Clear ECX completely
+            "movb (%%eax, %%ebx, 1), %%cl\n"  // Read exactly ONE byte into CL
+            "movl %%ecx, %%eax\n";            // Move the zero-extended byte to EAX
+    } else { // It's an Integer Array!
+        final_access = 
+            "movl %%eax, %%ebx\n"       
+            "movl %d(%%ebp), %%eax\n"   
+            "movl (%%eax, %%ebx, 4), %%eax\n"; // Read FOUR bytes
+    }
         
     char* final_buf = calloc(strlen(final_access) + 64, sizeof(char));
     sprintf(final_buf, final_access, var->int_value);
@@ -1048,6 +1117,7 @@ char* as_f_access(AST_T* ast, list_T* list)
     free(final_buf);
 
     return s;
+    
 }
 
 
@@ -1163,3 +1233,5 @@ char* as_f_array_alloc(AST_T* ast, list_T* list) {
     free(size_s);
     return s;
 }
+
+
