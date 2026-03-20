@@ -31,6 +31,8 @@ The complete architecture was developed in C and utilizes the GNU Toolchain for 
 ✔ Array Indexing & Mutation (`msg[i] = 'X'`)
 ✔ Null-Safe Semantic Type Checking
 ✔ `for` loop control structures
+✔ Support for N-Dimensional Array structures (Row-Major Ordering)
+✔ Constant Propagation & Folding Optimization passes
 
 ---
 
@@ -88,7 +90,7 @@ for (i = 0; i < 5; i = i + 1) {
 // Output: Jello
 ```
 
-## 🛠 Technical Deep Dive: Freestanding Architecture
+## Technical Deep Dive: Freestanding Architecture
 
 Unlike typical compilers that link against the C Standard Library (`libc`), the **GVR Compiler** is entirely freestanding. 
 
@@ -100,10 +102,39 @@ The generated binaries do not require `printf`, `malloc`, or `exit`. Instead, th
   - `EAX = 3`: `sys_read`
   - `EAX = 1`: `sys_exit`
 
+## Optimization Engine: Constant Propagation
+
+The GVR compiler includes a transformation pass that evaluates expressions at compile-time rather than runtime to reduce CPU overhead.
+
+### Constant Folding & Propagation
+If the compiler detects that a variable's value is known at compile-time, it propagates that value through the AST.
+
+**Source Code:**
+```python
+x:int = 5 + 5;  // Folded to 10
+y:int = x * 2;  // Propagated to 10 * 2 -> 20
+print(y);
+
 ### The Semantic Safety Net
 The compiler performs a **Two-Pass Semantic Analysis**:
 1. **Scope Resolution:** Ensures variables are declared before use.
 2. **Type Consistency:** Specifically handles "Type 5" (Char) interactions, allowing characters to be assigned to string indices while blocking unsafe `int` to `str` assignments.
+
+## 📊 Memory Layout: N-Dimensional Arrays
+
+GVR supports multi-dimensional data structures using **Row-Major Storage Layout**. 
+
+### Index Calculation Logic
+For an array declared as `matrix[Rows][Cols]`, the compiler calculates the memory offset for `matrix[i][j]` using the following linear transformation:
+$$Address = Base + (i \times Cols + j) \times ElementSize$$
+
+**Example: 2D Matrix Manipulation**
+```python
+// 3x3 Integer Matrix
+var grid = [ [1, 2, 3], [4, 5, 6], [7, 8, 9] ];
+
+print(grid[1][2]); // Accesses Row 1, Col 2 -> Outputs 6
+```
 
 ## Syntax & Formats
 
@@ -234,6 +265,8 @@ make
 - [ ] Floating-point arithmetic using X87 FPU instructions
 - [x] Boolean logic operators (`&&`, `||`)
 - [x] Optimization pass (Constant Folding)
+- [ ] **Register Allocation:** Moving from a stack-based to a register-based VM.
+- [ ] **Pointers & Referencing:** Support for `&` (address-of) and `*` (dereference) operators.
 
 ### Author
 Gautam V (Student)
