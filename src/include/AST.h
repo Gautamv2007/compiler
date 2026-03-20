@@ -41,6 +41,7 @@ typedef struct AST_STRUCT
   
   int int_value;
   int data_type;
+  int int_value2; // Optional: For future use (e.g., array sizes, second operand in certain operations)
 
   // Function pointer for the visitor to execute logic specific to this node
   struct AST_STRUCT* (*fptr)(struct VISITOR_STRUCT* visitor, struct AST_STRUCT* node, list_T* list);

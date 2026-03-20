@@ -461,6 +461,7 @@ char* as_f_assignment(AST_T* ast, list_T* list)
   else 
   {
       // --- NEW: ARE WE ASSIGNING TO AN ARRAY INDEX? (e.g., arr[0] = 99) ---
+      // --- ARE WE ASSIGNING TO AN ARRAY INDEX? (1D or 2D) ---
       if (ast->left != NULL && ast->left->type == AST_ACCESS) 
       {
           AST_T* var = var_lookup(list, ast->left->name);
@@ -470,24 +471,58 @@ char* as_f_assignment(AST_T* ast, list_T* list)
           }
 
           char* val_s = as_f(ast->value, list);
-          AST_T* index_ast = (AST_T*)ast->left->value->children->items[0];
-          char* index_s = as_f(index_ast, list);
+          
+          AST_T* row_ast = (AST_T*)ast->left->value->children->items[0];
+          char* row_s = as_f(row_ast, list);
 
-          const char* array_template = 
-              "%s"                       // 1. Evaluate Value -> Result in EAX
-              "pushl %%eax\n"            // 2. Save Value to stack safely
-              "%s"                       // 3. Evaluate Index -> Result in EAX
-              "movl %%eax, %%ebx\n"      // 4. Move Index to EBX
-              "popl %%eax\n"             // 5. Restore Value back to EAX
-              "movl %d(%%ebp), %%ecx\n"  // 6. Load Array Base Pointer to ECX
+          // IS IT A 2D ARRAY WRITE?
+          if (ast->left->right != NULL) 
+          {
+              AST_T* col_ast = (AST_T*)ast->left->right->children->items[0];
+              char* col_s = as_f(col_ast, list);
+              char* total_cols_s = as_f(var->right, list);
+
+              const char* template_2d = 
+                  "%s"                       // Eval Value to store -> EAX
+                  "pushl %%eax\n"            // Save Value to stack
+                  "%s"                       // Eval Total Columns -> EAX
+                  "pushl %%eax\n"            // Save Total Columns
+                  "%s"                       // Eval Row Index -> EAX
+                  "popl %%ebx\n"             // EBX = Total Columns
+                  "imull %%ebx, %%eax\n"     // EAX = Row * Total_Columns
+                  "pushl %%eax\n"            // Save Flattened Row
+                  "%s"                       // Eval Col Index -> EAX
+                  "movl %%eax, %%ebx\n"      // EBX = Col Index
+                  "popl %%eax\n"             // EAX = Flattened Row
+                  "addl %%ebx, %%eax\n"      // EAX = Final Flat Index
+                  "movl %%eax, %%ebx\n"      // Move Flat Index to EBX
+                  
+                  "popl %%eax\n"             // Restore Value to store into EAX
+                  "movl %d(%%ebp), %%ecx\n"  // Load Array Base Pointer to ECX
+                  "movl %%eax, (%%ecx, %%ebx, 4)\n"; // WRITE TO MEMORY!
+
+              s = realloc(s, (strlen(val_s) + strlen(row_s) + strlen(col_s) + strlen(total_cols_s) + 512) * sizeof(char));
+              sprintf(s, template_2d, val_s, total_cols_s, row_s, col_s, var->int_value);
               
-              // 7. Store Value (EAX) into Memory at Base (ECX) + Index (EBX * 4)
-              "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
+              free(col_s); free(total_cols_s);
+          }
+          // IS IT A 1D ARRAY WRITE?
+          else 
+          {
+              const char* template_1d = 
+                  "%s"                       
+                  "pushl %%eax\n"            
+                  "%s"                       
+                  "movl %%eax, %%ebx\n"      
+                  "popl %%eax\n"             
+                  "movl %d(%%ebp), %%ecx\n"  
+                  "movl %%eax, (%%ecx, %%ebx, 4)\n"; 
 
-          s = realloc(s, (strlen(val_s) + strlen(index_s) + strlen(array_template) + 128) * sizeof(char));
-          sprintf(s, array_template, val_s, index_s, var->int_value);
+              s = realloc(s, (strlen(val_s) + strlen(row_s) + 256) * sizeof(char));
+              sprintf(s, template_1d, val_s, row_s, var->int_value);
+          }
 
-          free(val_s); free(index_s);
+          free(val_s); free(row_s);
           return s;
       }
       // --- END OF ARRAY ASSIGNMENT LOGIC ---
@@ -1008,23 +1043,56 @@ char* as_f_access(AST_T* ast, list_T* list)
         exit(1);
     }
 
-    // Evaluate the Index
-    AST_T* index_ast = (AST_T*)ast->value->children->items[0];
-    char* index_s = as_f(index_ast, list);
-    
-    char* s = calloc(strlen(index_s) + 256, sizeof(char));
-    sprintf(s, 
-        "%s"                        // Evaluate the index (result goes into %eax)
-        "movl %%eax, %%ebx\n"       // Move the index into %ebx
-        "movl %d(%%ebp), %%eax\n"   // Load the Array Base Pointer into %eax
-        
-        // --- X86 POINTER ARITHMETIC MAGIC ---
-        "movl (%%eax, %%ebx, 4), %%eax\n", 
-        
-        index_s, var->int_value
-    );
+    // 1. Evaluate the Row Index
+    AST_T* row_ast = (AST_T*)ast->value->children->items[0];
+    char* row_s = as_f(row_ast, list);
 
-    free(index_s);
+    char* s;
+
+    // --- 2D ARRAY ACCESS ---
+    if (ast->right != NULL) 
+    {
+        AST_T* col_ast = (AST_T*)ast->right->children->items[0];
+        char* col_s = as_f(col_ast, list);
+        
+        // Retrieve the Total Columns expression we saved in the Symbol Table!
+        char* total_cols_s = as_f(var->right, list);
+
+        const char* template_2d = 
+            "%s"                        // 1. Eval Total Columns -> EAX
+            "pushl %%eax\n"             // 2. Save Total Columns to stack
+            "%s"                        // 3. Eval Row Index -> EAX
+            "popl %%ebx\n"              // 4. Pop Total Columns into EBX
+            "imull %%ebx, %%eax\n"      // 5. EAX = Row * Total_Columns
+            "pushl %%eax\n"             // 6. Save Flattened Row to stack
+            "%s"                        // 7. Eval Col Index -> EAX
+            "movl %%eax, %%ebx\n"       // 8. Move Col Index to EBX
+            "popl %%eax\n"              // 9. Restore Flattened Row to EAX
+            "addl %%ebx, %%eax\n"       // 10. EAX = (Row * Total_Columns) + Col
+            "movl %%eax, %%ebx\n"       // 11. Move Final Flat Index to EBX
+            
+            "movl %d(%%ebp), %%eax\n"   // 12. Load Array Base Pointer to EAX
+            "movl (%%eax, %%ebx, 4), %%eax\n"; // 13. READ FROM MEMORY!
+
+        s = calloc(strlen(row_s) + strlen(col_s) + strlen(total_cols_s) + 512, sizeof(char));
+        sprintf(s, template_2d, total_cols_s, row_s, col_s, var->int_value);
+        
+        free(col_s); free(total_cols_s);
+    }
+    // --- 1D ARRAY ACCESS (Fallback) ---
+    else 
+    {
+        s = calloc(strlen(row_s) + 256, sizeof(char));
+        sprintf(s, 
+            "%s"                        
+            "movl %%eax, %%ebx\n"       
+            "movl %d(%%ebp), %%eax\n"   
+            "movl (%%eax, %%ebx, 4), %%eax\n", 
+            row_s, var->int_value
+        );
+    }
+
+    free(row_s);
     return s;
 }
 
@@ -1040,7 +1108,7 @@ void hoist_local_variables(AST_T* ast, list_T* list) {
             local_var->int_value = current_local_offset; 
             current_local_offset -= 4; 
             
-            // --- NEW: Smart Type Inference ---
+            // --- Smart Type Inference ---
             local_var->data_type = ast->data_type; // Default to what the user asked for
             
             // Override: If assigning from input(), force it to be a String (Type 2)
@@ -1055,6 +1123,14 @@ void hoist_local_variables(AST_T* ast, list_T* list) {
             }
             // ---------------------------------
             
+            // --- NEW: SAVE THE 2D ARRAY COLUMN SIZE ---
+            // If the user did `arr:int[5][10]`, the parser saved '10' in ast->value->right.
+            // We copy it to the local variable so the backend can find it later!
+            if (ast->value && ast->value->type == AST_ARRAY_ALLOC) {
+                local_var->right = ast->value->right; 
+            }
+            // ------------------------------------------
+
             list_push(list, local_var);
         }
     }

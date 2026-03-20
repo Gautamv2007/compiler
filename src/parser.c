@@ -362,23 +362,68 @@ AST_T* parser_parse_id(parser_T* parser)
               parser_eat(parser, TOKEN_LBRACKET);
               
               if (parser->token->type == TOKEN_RBRACKET) {
-                  // It's just `int[]` (Array Initialization expected next)
+                  // It's `int[]` (1D Array Initialization)
                   parser_eat(parser, TOKEN_RBRACKET);
-                  parsed_data_type = 3; // Let's use 3 for "Array"
+                  parsed_data_type = 3; // 3 means "1D Array"
+                  
+                  // --- NEW: Check for `int[][]` (2D Array Initialization) ---
+                  if (parser->token->type == TOKEN_LBRACKET) {
+                      parser_eat(parser, TOKEN_LBRACKET);
+                      parser_eat(parser, TOKEN_RBRACKET);
+                      parsed_data_type = 4; // Let's use 4 for "2D Array"
+                  }
               } else {
-                  // It's `int[20]` (Array Allocation!)
-                  AST_T* size_expr = parser_parse_expr(parser);
+                  // It's an Allocation! Parse the Row size (e.g., the '5' in int[5])
+                  AST_T* row_expr = parser_parse_expr(parser);
                   parser_eat(parser, TOKEN_RBRACKET);
+
+                  AST_T* col_expr = NULL;
+                  parsed_data_type = 3; // Default to 1D
+
+                  // --- NEW: Check for the Column size (e.g., the '10' in int[5][10]) ---
+                  if (parser->token->type == TOKEN_LBRACKET) {
+                      parser_eat(parser, TOKEN_LBRACKET);
+                      col_expr = parser_parse_expr(parser);
+                      parser_eat(parser, TOKEN_RBRACKET);
+                      parsed_data_type = 4; // Mark it as a 2D Array
+                  }
 
                   // Create the Allocation Node
                   AST_T* alloc_node = init_ast(AST_ARRAY_ALLOC);
-                  alloc_node->value = size_expr;
+
+                  if (col_expr != NULL) {
+                      // It's 2D! We must multiply Rows * Cols
+                      AST_T* total_size = init_ast(AST_BINOP);
+                      total_size->int_value = 4; 
+                      
+                      // --- NEW: PREVENT STRCMP NULL POINTER CRASH ---
+                      // Give the node string properties just in case your backend needs them!
+                      total_size->name = calloc(2, sizeof(char));
+                      strcpy(total_size->name, "*");
+                      
+                      // If your AST structure uses 'op' instead of 'name' for operators, 
+                      // you can set this too safely:
+                      total_size->op = calloc(2, sizeof(char));
+                      strcpy(total_size->op, "*");
+                      // ----------------------------------------------
+                      
+                      total_size->left = row_expr;
+                      total_size->right = col_expr;
+                      
+                      alloc_node->value = total_size; 
+                      alloc_node->right = col_expr; 
+                  } 
+                  else {
+                      // It's just 1D! Size is just the row_expr.
+                      alloc_node->value = row_expr;
+                  }
 
                   // Wrap it in an assignment to the variable name and return immediately
                   AST_T* assign_node = init_ast(AST_ASSIGNMENT);
                   assign_node->name = value;
-                  assign_node->data_type = 3; 
+                  assign_node->data_type = parsed_data_type; 
                   assign_node->value = alloc_node;
+                  
                   return assign_node;
               }
           }
@@ -399,7 +444,16 @@ AST_T* parser_parse_id(parser_T* parser)
   if (parser->token->type == TOKEN_LBRACKET) {
       array_access_node = init_ast(AST_ACCESS);
       array_access_node->name = value;
-      array_access_node->value = parser_parse_list(parser); // Captures the [0]
+      
+      // 1. Capture the Row index (e.g., the '1' in arr[1][2])
+      array_access_node->value = parser_parse_list(parser); 
+
+      // 2. --- NEW: Check for a second bracket for 2D Arrays! ---
+      if (parser->token->type == TOKEN_LBRACKET) {
+          // Capture the Column index (e.g., the '2' in arr[1][2])
+          // We will store this in the 'right' pointer of the AST_ACCESS node!
+          array_access_node->right = parser_parse_list(parser); 
+      }
   }
   // ----------------------------------------------------------------------------
 
