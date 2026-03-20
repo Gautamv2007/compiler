@@ -1,7 +1,8 @@
 main = () -> {
+  x:int = 5;
   
-  for (i:int = 0; i < 10; i += 2) {
-    print(i, "\n");
+  if (x != 10) {
+    print(99); 
   }
   
   return 0;

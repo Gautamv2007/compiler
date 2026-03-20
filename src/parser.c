@@ -76,6 +76,29 @@ AST_T* parser_parse_factor(parser_T* parser) {
             return ast;
         }
 
+        case TOKEN_BANG: {
+            parser_eat(parser, TOKEN_BANG);
+            
+            // Parse whatever comes immediately after the '!' (e.g., a variable or parentheses)
+            AST_T* right_node = parser_parse_factor(parser);
+
+            // THE COMPILER TRICK:
+            // Secretly rewrite `!x` as `x == 0` for the backend.
+            AST_T* zero_node = init_ast(AST_INT);
+            zero_node->int_value = 0;
+
+            AST_T* ast = init_ast(AST_BINOP);
+            ast->left = right_node;
+            
+            // Set the operator to "=="
+            ast->op = calloc(3, sizeof(char));
+            strcpy(ast->op, "==");
+            
+            ast->right = zero_node;
+            
+            return ast;
+        }
+
         case TOKEN_LPAREN: {
             // Use your existing list parser to handle the parentheses!
             // It will read the inside, and if it sees an arrow `->`, it will 
@@ -156,6 +179,7 @@ AST_T* parser_parse_comparison(parser_T* parser) {
     while (parser->token->type == TOKEN_LT || 
            parser->token->type == TOKEN_GT || 
            parser->token->type == TOKEN_EQUALS_EQUALS ||
+           parser->token->type == TOKEN_NOT_EQUALS ||
            parser->token->type == TOKEN_LTE || 
            parser->token->type == TOKEN_GTE) 
     {

@@ -198,6 +198,18 @@ token_T* lexer_next_token(lexer_T* lexer)
               return init_token("||", TOKEN_OR); // Define TOKEN_OR in token.h
           }
           break;
+      // Inside your lexer_next_token switch/loop:
+
+      case '!': {
+          if (lexer_peek(lexer, 1) == '=') {
+              lexer_advance(lexer); // consume '!'
+              lexer_advance(lexer); // consume '='
+              return init_token("!=", TOKEN_NOT_EQUALS); // Add to token.h if you haven't!
+          }
+          
+          lexer_advance(lexer); // consume just the '!'
+          return init_token("!", TOKEN_BANG); // Add TOKEN_BANG to token.h
+      }
       case ':': return lexer_advance_current(lexer, TOKEN_COLON);
       case ',': return lexer_advance_current(lexer, TOKEN_COMMA);
       case ';': return lexer_advance_current(lexer, TOKEN_SEMI);

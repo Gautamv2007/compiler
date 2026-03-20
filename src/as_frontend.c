@@ -220,6 +220,11 @@ char* as_f_binop(AST_T* ast, list_T* list) {
                   "sete %al\n"         // Set AL to 1 if Equal
                   "movzbl %al, %eax\n"); 
     }
+    else if (strcmp(ast->op, "!=") == 0) {
+        strcat(s, "cmpl %ebx, %eax\n"
+                  "setne %al\n"        // Set AL to 1 if Not Equal
+                  "movzbl %al, %eax\n"); 
+    }
     else if (strcmp(ast->op, "<=") == 0) 
     {
         char* left_val = as_f(ast->left, list);
