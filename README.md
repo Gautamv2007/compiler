@@ -27,6 +27,10 @@ The complete architecture was developed in C and utilizes the GNU Toolchain for 
 ✔ Interactive `input()` and type-casting `to_int()`  
 ✔ Modular Lexer, Parser, and AST pipeline  
 ✔ Native Linux Kernel system calls (`int 0x80`)  
+✔ Character Literal support (`'A'`, `'\n'`) 
+✔ Array Indexing & Mutation (`msg[i] = 'X'`)
+✔ Null-Safe Semantic Type Checking
+✔ `for` loop control structures
 
 ---
 
@@ -54,6 +58,53 @@ The compiler consists of the following modular phases:
 - **Linker (`ld`)** – Stitches object code into an ELF executable  
 
 ---
+
+### 4. Expansion of "Project Structure"
+Since your project has grown, adding descriptions for the internal header files makes it look like a professional API.
+
+```markdown
+### 📂 Internal Logic Mapping
+- `src/visitor.c`: The heart of the **Semantic Analyzer**. It walks the AST to find type mismatches before assembly is even generated.
+- `src/as_frontend.c`: The **Code Generator**. Maps AST nodes to x86 opcodes (`movl`, `pushl`, `call`).
+- `src/builtins.c`: Contains the **Assembly Templates** for the runtime library.
+
+---
+
+## 🚀 Recent Feature Showcase: String Manipulation
+
+GVR now supports direct character manipulation within strings.
+
+```python
+// Initializing a string
+msg:str = "hello";
+
+// Modifying an index with a character literal
+msg[0] = 'J'; 
+
+// Using the new 'for' loop syntax
+i:int = 0;
+for (i = 0; i < 5; i = i + 1) {
+    print("Character at ", i, " is: ", msg[i]);
+}
+// Output: Jello
+```
+
+## 🛠 Technical Deep Dive: Freestanding Architecture
+
+Unlike typical compilers that link against the C Standard Library (`libc`), the **GVR Compiler** is entirely freestanding. 
+
+### Zero-Dependency Runtime
+The generated binaries do not require `printf`, `malloc`, or `exit`. Instead, the compiler injects raw x86 assembly "built-ins" into the output file:
+- **Custom Memory Management:** A global 1KB buffer acts as a static heap. The `Bump Allocator` increments a pointer to manage string memory.
+- **Direct Kernel Communication:** I/O is handled via `int 0x80` interrupts. 
+  - `EAX = 4`: `sys_write`
+  - `EAX = 3`: `sys_read`
+  - `EAX = 1`: `sys_exit`
+
+### The Semantic Safety Net
+The compiler performs a **Two-Pass Semantic Analysis**:
+1. **Scope Resolution:** Ensures variables are declared before use.
+2. **Type Consistency:** Specifically handles "Type 5" (Char) interactions, allowing characters to be assigned to string indices while blocking unsafe `int` to `str` assignments.
 
 ## Syntax & Formats
 
@@ -176,12 +227,14 @@ make
 ./a.out
 ```
 
-### Future Enhancements
-- Support for floating-point arithmetic (float)
-- User-defined functions with parameters
-- Array support and contiguous memory structures
-- for loop syntax
-- Standard library and module system
+### 🗓 Roadmap / Future Enhancements
+- [x] `for` loop syntax implementation
+- [x] Array indexing and mutation
+- [x] Character data type (`char`)
+- [x] User-defined functions with stack-frame isolation
+- [ ] Floating-point arithmetic using X87 FPU instructions
+- [x] Boolean logic operators (`&&`, `||`)
+- [x] Optimization pass (Constant Folding)
 
 ### Author
 Gautam V (Student)
