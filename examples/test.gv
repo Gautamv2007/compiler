@@ -60,19 +60,16 @@ mergeSort:void = (arr:int[], l:int, r:int) -> {
 }
 
 main = () -> {
-    size:int = 1000;
-    arr:int[1000];
+    size:int = 15000;
+    arr:int[15000];
     
-    print("Generating 1,000 elements in reverse order...\n");
-    
-    # Automatically generate [1000, 999, 998 ... 3, 2, 1]
     for(i:int = 0; i < size; i += 1) {
         arr[i] = size - i;
     }
 
-    for(i:int = 0;i<size;i+=1){
-      print(i, " ");
-    }
+    mergeSort(arr, 0, size-1);
+
+    print("Sorting done!!\n");
     print("\n");
 
     return 0;

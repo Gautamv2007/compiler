@@ -89,7 +89,7 @@ The GVR language supports the following features:
 
 ### Control Flow
 
-- **Conditional Statements**: `if`, `else`
+- **Conditional Statements**: `if`, `else`, `elif `
 - **Loops**: `while`, `for`
 - **Function Calls**: User-defined functions
 
@@ -98,26 +98,31 @@ The GVR language supports the following features:
 - **Arithmetic**: `+`, `-`, `*`, `/`, `%`
 - **Comparison**: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - **Logical**: `&&`, `||`, `!`
-- **Assignment**: `=`
+- **Assignment**: `=`, `+=`, `-=`, `*=`, `/=`, `%=`
 
 ### Input/Output
 
-- **Read**: `read variable;`
-- **Print**: `print expression;`
+- **input()**: `read string;`
+- **to_int(input())**: `read integer`
+- **input_line()**: `read a whole line(useful when you want to input a string with spaces)`
+- **print()**: `Very similar to the print function in python`
 
 ### Example Program
 
 ```
-read n;
-factorial = 1;
-i = 1;
+main = () -> {
+    n:int = to_int(input()); #In my language we declare the variable name first and then the datatype
+    factorial:int = 1; #max value for int = 2,147,483,647 (standard max in 32 bit integer)
+    i:int = 1;
 
-while i <= n {
-    factorial = factorial * i;
-    i = i + 1;
+    while (i <= n) {
+        factorial *= i;
+        i += 1;
+    }
+
+    print(factorial, "\n"); #We can add pass multiple arguments
+    return 0; #We can avoid writing this if we use main:void in the top line
 }
-
-print factorial;
 ```
 
 ## Compiler Architecture
@@ -257,17 +262,11 @@ The test framework provides detailed error information:
 # Generated output: a.s
 ```
 
-### Manual Assembly and Linking
+### Running the program (The binary file is generated from the assembly automatically)
 
 ```bash
 # Assemble
-as --32 a.s -o program.o
-
-# Link
-ld -m elf_i386 program.o -o program
-
-# Run
-./program
+./a.out
 ```
 
 ### Complete Workflow Example
@@ -281,57 +280,32 @@ EOF
 # 2. Compile
 ./gvr.out hello.txt
 
-# 3. Assemble and link
-as --32 a.s -o hello.o
-ld -m elf_i386 hello.o -o hello
-
-# 4. Execute
-./hello
+# 3. Executre
+./a.out
 ```
 
 ## Examples
 
-### Example 1: Factorial Calculation
-
-**Source (factorial.txt):**
-```
-read n;
-result = 1;
-counter = 1;
-
-while counter <= n {
-    result = result * counter;
-    counter = counter + 1;
-}
-
-print result;
-```
-
-**Input (factorial.input):**
-```
-5
-```
-
-**Expected Output (factorial.expected):**
-```
-120
-```
-
-### Example 2: Fibonacci Sequence
+### Example 1: Fibonacci Sequence
 
 **Source (fibonacci.txt):**
 ```
-read n;
-a = 0;
-b = 1;
-i = 0;
 
-while i < n {
-    print a;
-    temp = a + b;
-    a = b;
-    b = temp;
-    i = i + 1;
+main:void = () -> {
+    n:int = to_int(input());
+    a:int = 0;
+    b:int = 1;
+    i:int = 0;
+
+    while(i < n){
+        print(a, " ");
+        temp:int = a+b;
+        a = b;
+        b = temp;
+        i += 1;
+    }
+
+    return 0;
 }
 ```
 
@@ -351,27 +325,32 @@ while i < n {
 8
 ```
 
-### Example 3: Arithmetic Operations
+### Example 2: Arithmetic Operations
 
 **Source (arithmetic.txt):**
 ```
-a = 10;
-b = 3;
-
-print a + b;
-print a - b;
-print a * b;
-print a / b;
-print a % b;
+main = () -> {
+    a:int = 10;
+    b:int = 2;
+    print(a+b, "\n");
+    print(a-b, "\n");
+    print(a*b, "\n");
+    print(a/b, "\n");
+    print(a%b, "\n");
+    print(-a, "\n");
+    
+    return 0;
+}
 ```
 
 **Expected Output (arithmetic.expected):**
 ```
-13
-7
-30
-3
-1
+12
+8
+20
+5
+0
+-10
 ```
 
 ## Best Practices
@@ -417,7 +396,7 @@ git commit -m "Add feature X with tests"
 - **Solution**: Check for infinite loops in source or generated code
 
 **Problem**: Segmentation fault during execution
-- **Solution**: Review stack management and memory access in assembly
+- **Solution**: Review stack management and memory access using VALGRIND tool in linux
 
 **Problem**: Output mismatch
 - **Solution**: Check whitespace, newlines, and numeric formatting
@@ -482,11 +461,9 @@ The compiler may support optimization flags:
 
 Example performance metrics:
 
-| Test | Lines of Code | Compile Time | Execution Time |
-|------|---------------|--------------|----------------|
-| Factorial | 8 | 0.05s | 0.001s |
-| Fibonacci | 12 | 0.06s | 0.002s |
-| Sorting | 25 | 0.10s | 0.015s |
+| Test | Execution Time (My Language) | Execution Time (C) | Execution Time (Python)|
+|------|--------------------------|--------------------|------------------------|
+| Sorting(15000 numbers) | 0.033s | 0.003s | 0.107s |
 
 ## Contributing
 
@@ -565,19 +542,6 @@ jobs:
 
 ## Advanced Features
 
-### Compiler Flags
-
-```bash
-# Verbose output
-./gvr.out -v program.txt
-
-# Debug symbols
-./gvr.out -g program.txt
-
-# Optimization
-./gvr.out -O2 program.txt
-```
-
 ### Custom Test Timeouts
 
 Edit `run_tests.py`:
@@ -621,4 +585,4 @@ Built with standard GNU toolchain:
 
 **Version**: 1.0  
 **Last Updated**: March 2026  
-**Maintainer**: gautam V 
+**Maintainer**: Gautam V (Student)

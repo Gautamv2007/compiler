@@ -701,7 +701,7 @@ const char* asm_builtins =
 // --- NEW: Dynamic Bump Allocator for Input ---
 ".section .bss\n"
 ".lcomm global_input_buffer, 1024\n"
-".lcomm global_heap, 8388608\n"
+".lcomm global_heap, 67108864\n" //64mb
 ".section .data\n"
 "current_input_ptr: .long global_input_buffer\n"
 "heap_ptr: .long global_heap\n"
@@ -986,17 +986,56 @@ char* as_f_root(AST_T* ast, list_T* list)
   
   char* user_code = as_f(ast, list);
   
-  const char* section_data_header = ".section .data\n";
-  const char* section_text_header = ".section .text\n"
-                                    ".globl _start\n"
-                                    "_start:\n"
-                                    "pushl 0(%esp)\n"
-                                    "pushl 4(%esp)\n"
-                                    "call main\n"
-                                    "addl $4, %esp\n"
-                                    "movl %eax, %ebx\n"
-                                    "movl $1, %eax\n"
-                                    "int $0x80\n\n";
+//   const char* section_data_header = ".section .data\n";
+//   const char* section_text_header = ".section .text\n"
+//                                     ".globl _start\n"
+//                                     "_start:\n"
+//                                     "pushl 0(%esp)\n"
+//                                     "pushl 4(%esp)\n"
+//                                     "call main\n"
+//                                     "addl $4, %esp\n"
+//                                     "movl %eax, %ebx\n"
+//                                     "movl $1, %eax\n"
+//                                     "int $0x80\n\n";
+    // --- 1. Add 'saved_esp' to your data header ---
+const char* section_data_header = ".section .data\n"
+                                  "saved_esp: .long 0\n";
+
+// --- 2. Inject the Stack Switch into your text header ---
+const char* section_text_header = ".section .text\n"
+                                  ".globl _start\n"
+                                  "_start:\n"
+                                  // Step 1: Save the original OS stack pointer
+                                  "movl %esp, saved_esp\n"   
+                                  
+                                  // Step 2: Allocate 64MB using mmap2 (Syscall 192)
+                                  "movl $192, %eax\n"        // sys_mmap2
+                                  "movl $0, %ebx\n"          // addr = NULL
+                                  "movl $67108864, %ecx\n"   // length = 64MB
+                                  "movl $3, %edx\n"          // prot = READ (1) | WRITE (2)
+                                  "movl $34, %esi\n"         // flags = PRIVATE (2) | ANONYMOUS (32)
+                                  "movl $-1, %edi\n"         // fd = -1
+                                  "movl $0, %ebp\n"          // offset = 0
+                                  "int $0x80\n"              
+                                  
+                                  // Step 3: Move the stack pointer to the TOP of the new 64MB block
+                                  "addl $67108864, %eax\n"   
+                                  "movl %eax, %esp\n"        
+                                  "movl %eax, %ebp\n"        
+                                  
+                                  // Step 4: Retrieve argc and argv from the OLD stack
+                                  "movl saved_esp, %edx\n"   // Bring old pointer into EDX
+                                  "movl 4(%edx), %ebx\n"     // Read argv[0]
+                                  "pushl %ebx\n"             // Push argv[0] to the NEW stack
+                                  "movl 0(%edx), %eax\n"     // Read argc
+                                  "pushl %eax\n"             // Push argc to the NEW stack
+                                  
+                                  // Step 5: Call user code and exit
+                                  "call main\n"              
+                                  "addl $8, %esp\n"          // Clean up the 2 pushes (8 bytes)
+                                  "movl %eax, %ebx\n"        
+                                  "movl $1, %eax\n"          // sys_exit
+                                  "int $0x80\n\n";
 
   size_t total_size = strlen(section_data_header) + strlen(string_data_section) + 
                       strlen(section_text_header) + strlen(user_code) + strlen(asm_builtins) + 1;
