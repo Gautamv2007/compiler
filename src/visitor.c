@@ -209,7 +209,7 @@ AST_T* visitor_visit_call(visitor_T* visitor, AST_T* node, list_T* list)
         node->value = visitor_visit(visitor, node->value, list);
     }
 
-    if (strcmp(node->name, "print") == 0 || strcmp(node->name, "input") == 0 || strcmp(node->name, "to_int") == 0 || strcmp(node->name, "return") == 0) {
+    if (strcmp(node->name, "print") == 0 || strcmp(node->name, "input") == 0 || strcmp(node->name, "to_int") == 0 || strcmp(node->name, "return") == 0 || strcmp(node->name, "input_line") == 0) {
         return node; 
     }
     

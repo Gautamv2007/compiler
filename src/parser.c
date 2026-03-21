@@ -382,10 +382,14 @@ AST_T* parser_parse_id(parser_T* parser)
                   alloc_node->value = total_size; 
 
                   AST_T* assign_node = init_ast(AST_ASSIGNMENT);
-                  assign_node->line = current_line;
+                  assign_node->line = current_line; // <-- Use saved line
                   assign_node->name = value;
-                  assign_node->data_type = 3; 
+                  assign_node->data_type = 3;       // 3 means Array
                   assign_node->value = alloc_node;
+                  
+                  sym_names[sym_count] = assign_node->name;
+                  sym_types[sym_count] = 3;
+                  sym_count++;
                   
                   return assign_node;
               }

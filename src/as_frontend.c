@@ -78,41 +78,35 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     char* left_s = as_f(ast->left, list);
 
     const char* template = 
-        "%s"                  // Left side result into EAX
-        "pushl %%eax\n"       // Save left side
-        "%s"                  // Right side result into EAX
-        "movl %%eax, %%ebx\n" // Move right side to EBX
-        "popl %%eax\n";       // Restore left side to EAX
+        "%s"                  
+        "pushl %%eax\n"       
+        "%s"                  
+        "movl %%eax, %%ebx\n" 
+        "popl %%eax\n";       
 
     s = realloc(s, (strlen(right_s) + strlen(left_s) + strlen(template) + 512) * sizeof(char));
     sprintf(s, template, left_s, right_s);
 
-    char* op_s = calloc(512, sizeof(char));
-
     if (strcmp(ast->op, "&&") == 0) {
-        sprintf(op_s, 
-            "cmp $0, %%ebx\n"      // Check if Left (%ebx) is 0
-            "setne %%bl\n"         // Set %bl to 1 if NOT equal to 0
-            "movzbl %%bl, %%ebx\n" // Zero-extend %bl to the full %ebx register
-
-            "cmp $0, %%eax\n"      // Check if Right (%eax) is 0
-            "setne %%al\n"         // Set %al to 1 if NOT equal to 0
-            "movzbl %%al, %%eax\n" // Zero-extend %al to the full %eax register
-
-            "andl %%ebx, %%eax\n"  // Now do the AND. Result (0 or 1) is in %eax!
+        strcat(s, 
+            "cmp $0, %ebx\n"
+            "setne %bl\n"
+            "movzbl %bl, %ebx\n"
+            "cmp $0, %eax\n"
+            "setne %al\n"
+            "movzbl %al, %eax\n"
+            "andl %ebx, %eax\n"
         );
     } 
     else if (strcmp(ast->op, "||") == 0) {
-        sprintf(op_s, 
-            "cmp $0, %%ebx\n"
-            "setne %%bl\n"
-            "movzbl %%bl, %%ebx\n"
-
-            "cmp $0, %%eax\n"
-            "setne %%al\n"
-            "movzbl %%al, %%eax\n"
-
-            "orl %%ebx, %%eax\n"   // Now do the OR. Result (0 or 1) is in %eax!
+        strcat(s, 
+            "cmp $0, %ebx\n"
+            "setne %bl\n"
+            "movzbl %bl, %ebx\n"
+            "cmp $0, %eax\n"
+            "setne %al\n"
+            "movzbl %al, %eax\n"
+            "orl %ebx, %eax\n"
         );
     }
     else if (strcmp(ast->op, "+") == 0) {
@@ -125,60 +119,45 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         strcat(s, "imull %ebx, %eax\n");
     }
     else if (strcmp(ast->op, "/") == 0) {
-      // We check the actual integer value instead of the name pointer
       if (ast->right->type == AST_INT && ast->right->int_value == 0) 
       {
           printf("\n[Math Error]: Division by literal zero detected!\n");
-          printf("  -> You are trying to divide by '0'.\n");
           exit(1);
       }
-
-      //Check if it's a variable we are dividing by, and if we have tracked it as being zero
       if (ast->right->type == AST_VARIABLE && ast->right->name != NULL) 
       {
           for (int i = 0; i < tracked_count; i++) {
               if (strcmp(tracked_vars[i], ast->right->name) == 0) {
                   if (tracked_vals[i] == 0) {
                       printf("\n[Math Error]: Division by zero detected via variable '%s'!\n", ast->right->name);
-                      printf("  -> My Constant Propagation engine tracked '%s' and knows it currently holds '0'.\n", ast->right->name);
                       exit(1);
                   }
                   break;
               }
           }
       }
-      // Generate assembly for left and right sides
       char* left_val = as_f(ast->left, list);
       char* right_val = as_f(ast->right, list);
 
-      // We use a static counter so every division gets a unique label!
       static int div_count = 0; 
       div_count++;
 
-      // Assembly template:
       const char* template = 
-          "%s"                   // 1. Evaluate left side (puts result in %eax)
-          "pushl %%eax\n"        // 2. Save dividend on the stack
-          "%s"                   // 3. Evaluate right side (puts result in %eax)
-          "movl %%eax, %%ebx\n"  // 4. Move right side to %ebx (the divisor)
-          "popl %%eax\n"         // 5. Restore left side to %eax (the dividend)
-          
-          // RUN-TIME SAFETY CHECK
-          "cmpl $0, %%ebx\n"               // Is the divisor zero?
-          "jne .L_safe_div_%d\n"           // If NOT zero, jump down to the safe math
-          "movl $1, %%eax\n"               // If IS zero, prepare sys_exit (1)
-          "movl $1, %%ebx\n"               // Exit code 1 (clean crash)
-          "int $0x80\n"                    // Call Linux to kill the program
-          ".L_safe_div_%d:\n"              // <-- The safe jump target!
-          
-          // The actual division
-          "cdq\n"                // Sign-extend %eax into %edx (required for idivl)
-          "idivl %%ebx\n";       // Divide %edx:%eax by %ebx. Result goes in %eax!
+          "%s"
+          "pushl %%eax\n"
+          "%s"
+          "movl %%eax, %%ebx\n"
+          "popl %%eax\n"
+          "cmpl $0, %%ebx\n"
+          "jne .L_safe_div_%d\n"
+          "movl $1, %%eax\n"
+          "movl $1, %%ebx\n"
+          "int $0x80\n"
+          ".L_safe_div_%d:\n"
+          "cdq\n"
+          "idivl %%ebx\n";
 
-      // Calculate memory needed for the string (adding room for our %d integers)
       s = realloc(s, (strlen(template) + strlen(left_val) + strlen(right_val) + 64) * sizeof(char));
-      
-      // Inject the values AND our unique division counter!
       sprintf(s, template, left_val, right_val, div_count, div_count);
       
       free(left_val);
@@ -187,27 +166,26 @@ char* as_f_binop(AST_T* ast, list_T* list) {
     else if (strcmp(ast->op, "%") == 0){
         strcat(s, "cdq\n"
                   "idivl %ebx\n"
-                  "movl %edx, %eax\n"); // Move remainder into EAX
+                  "movl %edx, %eax\n");
     }
-    // Comparison Operators (NEW)
     else if (strcmp(ast->op, "<") == 0) {
         strcat(s, "cmpl %ebx, %eax\n"
-                  "setl %al\n"         // Set AL to 1 if Less
-                  "movzbl %al, %eax\n"); // Zero-extend AL to EAX
+                  "setl %al\n"
+                  "movzbl %al, %eax\n");
     }
     else if (strcmp(ast->op, ">") == 0) {
         strcat(s, "cmpl %ebx, %eax\n"
-                  "setg %al\n"         // Set AL to 1 if Greater
+                  "setg %al\n"
                   "movzbl %al, %eax\n"); 
     }
     else if (strcmp(ast->op, "==") == 0) {
         strcat(s, "cmpl %ebx, %eax\n"
-                  "sete %al\n"         // Set AL to 1 if Equal
+                  "sete %al\n"
                   "movzbl %al, %eax\n"); 
     }
     else if (strcmp(ast->op, "!=") == 0) {
         strcat(s, "cmpl %ebx, %eax\n"
-                  "setne %al\n"        // Set AL to 1 if Not Equal
+                  "setne %al\n"
                   "movzbl %al, %eax\n"); 
     }
     else if (strcmp(ast->op, "<=") == 0) 
@@ -216,21 +194,19 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         char* right_val = as_f(ast->right, list);
 
         const char* template = 
-            "%s"                   // 1. Evaluate left side
-            "pushl %%eax\n"        // 2. Save left side on stack
-            "%s"                   // 3. Evaluate right side
-            "movl %%eax, %%ebx\n"  // 4. Move right side to %ebx
-            "popl %%eax\n"         // 5. Pop left side back into %eax
-            
-            "cmpl %%ebx, %%eax\n"  // 6. Compare %eax (left) with %ebx (right)
-            "setle %%al\n"         // 7. Set %al to 1 if Less or Equal, else 0
-            "movzbl %%al, %%eax\n";// 8. Zero out the rest of %eax so it's a clean 1 or 0
+            "%s"
+            "pushl %%eax\n"
+            "%s"
+            "movl %%eax, %%ebx\n"
+            "popl %%eax\n"
+            "cmpl %%ebx, %%eax\n"
+            "setle %%al\n"
+            "movzbl %%al, %%eax\n";
             
         s = realloc(s, (strlen(template) + strlen(left_val) + strlen(right_val) + 1) * sizeof(char));
         sprintf(s, template, left_val, right_val);
         free(left_val); free(right_val);
     }
-
     else if (strcmp(ast->op, ">=") == 0) 
     {
         char* left_val = as_f(ast->left, list);
@@ -242,18 +218,13 @@ char* as_f_binop(AST_T* ast, list_T* list) {
             "%s"
             "movl %%eax, %%ebx\n"
             "popl %%eax\n"
-            
             "cmpl %%ebx, %%eax\n"  
-            "setge %%al\n"         // <-- ONLY DIFFERENCE: 'setge' (Set if Greater or Equal)
+            "setge %%al\n"
             "movzbl %%al, %%eax\n";
           
         s = realloc(s, (strlen(template) + strlen(left_val) + strlen(right_val) + 1) * sizeof(char));
         sprintf(s, template, left_val, right_val);
         free(left_val); free(right_val);
-    }
-    else {
-        printf("[Backend Error]: Unknown binary operator '%s'\n", ast->op);
-        exit(1);
     }
     
     free(right_s);
@@ -730,7 +701,7 @@ const char* asm_builtins =
 // --- NEW: Dynamic Bump Allocator for Input ---
 ".section .bss\n"
 ".lcomm global_input_buffer, 1024\n"
-".lcomm global_heap, 8192\n"
+".lcomm global_heap, 8388608\n"
 ".section .data\n"
 "current_input_ptr: .long global_input_buffer\n"
 "heap_ptr: .long global_heap\n"

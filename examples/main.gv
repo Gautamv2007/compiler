@@ -1,9 +1,8 @@
 main = () -> {
-  hypercube:int[10][10][10][10];
-  
-  hypercube[2][5][8][9] = 42;
-  
-  print(hypercube[2][5][8][9]);
-  
+  arr:int[] = {1, 2, 3, 4, 5};
+  for(i:int = 0;i<5;i+=1){
+    print(arr[i], " ");
+  }
+  print("\n");
   return 0;
 }

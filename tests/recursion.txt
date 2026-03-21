@@ -1,0 +1,12 @@
+fact = (n:int) -> {
+    if (n == 1){
+        return 1;
+    }
+    return n * fact(n-1);
+}
+
+main = () -> {
+    x:int = 5;
+    print(fact(x), "\n");
+    return 0;
+}

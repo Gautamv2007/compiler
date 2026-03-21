@@ -85,6 +85,39 @@ token_T* lexer_parse_id(lexer_T* lexer)
   return token;
 }
 
+void lexer_skip_comment(lexer_T* lexer)
+{
+    if (lexer->c == '#' && lexer_peek(lexer, 1) == '#' && lexer_peek(lexer, 2) == '#') 
+    {
+        lexer_advance(lexer); 
+        lexer_advance(lexer); 
+        lexer_advance(lexer);
+
+        while (lexer->c != '\0') 
+        {
+            if (lexer->c == '#' && lexer_peek(lexer, 1) == '#' && lexer_peek(lexer, 2) == '#') 
+            {
+                lexer_advance(lexer);
+                lexer_advance(lexer);
+                lexer_advance(lexer);
+                break;
+            }
+            if (lexer->c == '\n') {
+                lexer->line += 1;
+            }
+            
+            lexer_advance(lexer);
+        }
+    } 
+    else if (lexer->c == '#') 
+    {
+        while (lexer->c != '\n' && lexer->c != '\0') 
+        {
+            lexer_advance(lexer);
+        }
+    }
+}
+
 token_T* lexer_parse_number(lexer_T* lexer)
 {
   int current_line = lexer->line;
@@ -107,6 +140,10 @@ token_T* lexer_next_token(lexer_T* lexer)
   {
     lexer_skip_whitespace(lexer);
     if (lexer->c == '\0') break;
+    if (lexer->c == '#') {
+        lexer_skip_comment(lexer);
+        continue; 
+    }
 
     if (isalpha(lexer->c)) return lexer_parse_id(lexer);
     if (isdigit(lexer->c)) return lexer_parse_number(lexer);

@@ -63,8 +63,6 @@ main = () -> {
     size:int = 1000;
     arr:int[1000];
     
-    print("Generating 1,000 elements in reverse order...\n");
-    
     # Automatically generate [1000, 999, 998 ... 3, 2, 1]
     for(i:int = 0; i < size; i += 1) {
         arr[i] = size - i;
