@@ -12,6 +12,7 @@ lexer_T* init_lexer(char *src)
   lexer->src_size = strlen(src);
   lexer->i = 0;
   lexer->c = src[lexer->i];
+  lexer->line = 1;
   return lexer;
 }
 
@@ -32,6 +33,7 @@ char lexer_peek(lexer_T* lexer, int offset)
 
 token_T* lexer_advance_with(lexer_T* lexer, token_T* token)
 {
+  token->line = lexer->line;
   lexer_advance(lexer);
   return token;
 }
@@ -42,6 +44,7 @@ token_T* lexer_advance_current(lexer_T* lexer, int type)
   value[0] = lexer->c;
   value[1] = '\0';
   token_T* token = init_token(value, type);
+  token->line = lexer->line;
   lexer_advance(lexer);
   return token;
 }
@@ -49,12 +52,19 @@ token_T* lexer_advance_current(lexer_T* lexer, int type)
 void lexer_skip_whitespace(lexer_T *lexer)
 {
   while(lexer->c == 13 || lexer->c == 10 || lexer->c == ' ' || lexer->c == '\t')
-  lexer_advance(lexer);
+  {
+    if (lexer->c == 10) {        
+        lexer->line += 1;       
+    }
+    lexer_advance(lexer);
+  }
 }
 
 token_T* lexer_parse_id(lexer_T* lexer)
 {
+  int current_line = lexer->line;
   char *value = calloc(1, sizeof(char));
+  token_T* token = NULL;
   while(isalnum(lexer->c) || lexer->c == '_')
   {
     value = realloc(value, (strlen(value) + 2) * sizeof(char));
@@ -70,12 +80,15 @@ token_T* lexer_parse_id(lexer_T* lexer)
   if (strcmp(value, "return") == 0) return init_token(value, TOKEN_RETURN);
   if (strcmp(value, "int") == 0) return init_token(value, TOKEN_KW_INT); 
   if (strcmp(value, "str") == 0) return init_token(value, TOKEN_KW_STR);
-
-  return init_token(value, TOKEN_ID);  
+  else token = init_token(value, TOKEN_ID);
+  token->line = current_line;
+  return token;
 }
 
 token_T* lexer_parse_number(lexer_T* lexer)
 {
+  int current_line = lexer->line;
+  token_T* token = NULL;
   char *value = calloc(1, sizeof(char));
   while(isdigit(lexer->c))
   {
@@ -83,7 +96,9 @@ token_T* lexer_parse_number(lexer_T* lexer)
     strcat(value, (char[]){lexer->c, 0});
     lexer_advance(lexer);
   }
-  return init_token(value, TOKEN_INT);
+  token = init_token(value, TOKEN_INT);
+  token->line = current_line;
+  return token;
 }
 
 token_T* lexer_next_token(lexer_T* lexer)
@@ -232,6 +247,9 @@ token_T* lexer_collect_string(lexer_T* lexer) {
     value[0] = '\0';
 
     while (lexer->c != '"' && lexer->c != '\0') {
+        if(lexer->c == '\n'){
+          lexer->line += 1;
+        }
         char* s = lexer_get_char_as_str(lexer); 
         value = realloc(value, (strlen(value) + strlen(s) + 1) * sizeof(char));
         strcat(value, s);

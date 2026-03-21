@@ -51,9 +51,11 @@ AST_T* parser_parse_factor(parser_T* parser) {
             }
 
             AST_T* zero_node = init_ast(AST_INT);
+            zero_node->line = parser->token->line;
             zero_node->int_value = 0;
 
             AST_T* ast = init_ast(AST_BINOP);
+            ast->line = parser->token->line;
             ast->left = zero_node;
             
             ast->op = calloc(2, sizeof(char));
@@ -69,9 +71,11 @@ AST_T* parser_parse_factor(parser_T* parser) {
             AST_T* right_node = parser_parse_factor(parser);
 
             AST_T* zero_node = init_ast(AST_INT);
+            zero_node->line = parser->token->line;
             zero_node->int_value = 0;
 
             AST_T* ast = init_ast(AST_BINOP);
+            ast->line = parser->token->line;
             ast->left = right_node;
             
             ast->op = calloc(3, sizeof(char));
@@ -101,6 +105,7 @@ AST_T* parser_parse_factor(parser_T* parser) {
             parser_eat(parser, TOKEN_LBRACE);
             
             AST_T* ast = init_ast(AST_ARRAY);
+            ast->line = parser->token->line;
             ast->children = init_list(sizeof(AST_T*));
             
             while (parser->token->type != TOKEN_RBRACE) {
@@ -116,6 +121,7 @@ AST_T* parser_parse_factor(parser_T* parser) {
 
         case TOKEN_STRING: {
             AST_T* ast = init_ast(AST_STRING);
+                ast->line = parser->token->line;
             ast->string_value = calloc(strlen(parser->token->value) + 1, sizeof(char));
             strcpy(ast->string_value, parser->token->value);
             parser_eat(parser, TOKEN_STRING);
@@ -124,6 +130,7 @@ AST_T* parser_parse_factor(parser_T* parser) {
 
         case TOKEN_CHAR: {
             AST_T* char_node = init_ast(AST_INT);
+            char_node->line = parser->token->line;
             
             char_node->int_value = (int)parser->token->value[0]; 
             
@@ -150,6 +157,7 @@ AST_T* parser_parse_multiplicative(parser_T* parser) {
         parser_eat(parser, op_token->type);
 
         AST_T* binop = init_ast(AST_BINOP);
+        binop->line = parser->token->line;
         binop->left = left;
         binop->op = op_token->value;
         binop->right = parser_parse_factor(parser);
@@ -166,6 +174,7 @@ AST_T* parser_parse_additive(parser_T* parser) {
         parser_eat(parser, op_token->type);
 
         AST_T* binop = init_ast(AST_BINOP);
+        binop->line = parser->token->line;
         binop->left = left;
         binop->op = op_token->value;
         binop->right = parser_parse_multiplicative(parser);
@@ -187,6 +196,7 @@ AST_T* parser_parse_comparison(parser_T* parser) {
         parser_eat(parser, op_token->type);
 
         AST_T* binop = init_ast(AST_BINOP);
+        binop->line = parser->token->line;
         binop->left = left;
         
         binop->op = op_token->value; 
@@ -201,8 +211,10 @@ AST_T* parser_parse_comparison(parser_T* parser) {
 AST_T* parser_parse_expr(parser_T* parser) {
     
     if (parser->token->type == TOKEN_WHILE) {
+        int current_line = parser->token->line;
         parser_eat(parser, TOKEN_WHILE);
         AST_T* ast = init_ast(AST_WHILE);
+        ast->line = current_line;
         parser_eat(parser, TOKEN_LPAREN);
         ast->value = parser_parse_expr(parser);
         parser_eat(parser, TOKEN_RPAREN);
@@ -211,8 +223,11 @@ AST_T* parser_parse_expr(parser_T* parser) {
     }
 
     if (parser->token->type == TOKEN_IF) {
+        int current_line = parser->token->line;
         parser_eat(parser, TOKEN_IF);
+
         AST_T* ast = init_ast(AST_IF);
+        ast->line = current_line;
         
         parser_eat(parser, TOKEN_LPAREN);
         ast->value = parser_parse_expr(parser); 
@@ -241,11 +256,15 @@ AST_T* parser_parse_expr(parser_T* parser) {
     }
 
     if (parser->token->type == TOKEN_RETURN) {
+        int current_line = parser->token->line;
+
         AST_T* ast = init_ast(AST_CALL);
+        ast->line = current_line;
         ast->name = calloc(7, sizeof(char));
         strcpy(ast->name, "return");
         parser_eat(parser, TOKEN_RETURN);
         ast->value = init_ast(AST_COMPOUND);
+        ast->value->line = parser->token->line;
         list_push(ast->value->children, parser_parse_expr(parser));
         return ast;
     }
@@ -302,6 +321,7 @@ int get_expression_type(AST_T* node) {
 
 AST_T* parser_parse_id(parser_T* parser)
 {
+    int current_line = parser->token->line;
   char* value = calloc(strlen(parser->token->value) + 1, sizeof(char));
   strcpy(value, parser->token->value);
   parser_eat(parser, TOKEN_ID);
@@ -329,6 +349,7 @@ AST_T* parser_parse_id(parser_T* parser)
                   }
               } else {
                   AST_T* alloc_node = init_ast(AST_ARRAY_ALLOC);
+                  alloc_node->line = current_line;
                   alloc_node->children = init_list(sizeof(AST_T*));
                   
                   AST_T* dim_expr = parser_parse_expr(parser);
@@ -347,6 +368,7 @@ AST_T* parser_parse_id(parser_T* parser)
                       AST_T* next_dim = (AST_T*)alloc_node->children->items[i];
                       
                       AST_T* mul_node = init_ast(AST_BINOP);
+                      mul_node->line = current_line;
                       mul_node->int_value = 4; 
                       mul_node->name = calloc(2, sizeof(char)); strcpy(mul_node->name, "*");
                       mul_node->op   = calloc(2, sizeof(char)); strcpy(mul_node->op, "*");
@@ -360,6 +382,7 @@ AST_T* parser_parse_id(parser_T* parser)
                   alloc_node->value = total_size; 
 
                   AST_T* assign_node = init_ast(AST_ASSIGNMENT);
+                  assign_node->line = current_line;
                   assign_node->name = value;
                   assign_node->data_type = 3; 
                   assign_node->value = alloc_node;
@@ -372,8 +395,13 @@ AST_T* parser_parse_id(parser_T* parser)
           parsed_data_type = 2;  
           parser_eat(parser, parser->token->type); 
       }
+      // ---> NEW: Support 'void' as a type! <---
+      else if (strcmp(parser->token->value, "void") == 0) {
+          parsed_data_type = 4; 
+          parser_eat(parser, parser->token->type);
+      }
       else {
-          printf("[Parser Error]: Expected a valid data type like 'int' or 'string' after ':', but got '%s'\n", parser->token->value);
+          printf("[Parser Error]: Expected a valid data type like 'int', 'string', or 'void' after ':', but got '%s'\n", parser->token->value);
           exit(1);
       }
   }
@@ -381,6 +409,7 @@ AST_T* parser_parse_id(parser_T* parser)
   AST_T* array_access_node = NULL;
   if (parser->token->type == TOKEN_LBRACKET) {
       array_access_node = init_ast(AST_ACCESS);
+      array_access_node->line = current_line;
       array_access_node->name = value;
       array_access_node->children = init_list(sizeof(AST_T*));
       
@@ -401,6 +430,7 @@ AST_T* parser_parse_id(parser_T* parser)
     parser_eat(parser, op_type);
     
     AST_T* ast = init_ast(AST_ASSIGNMENT);
+    ast->line = current_line;
     ast->name = value;
     ast->data_type = parsed_data_type; 
     
@@ -435,17 +465,12 @@ AST_T* parser_parse_id(parser_T* parser)
                 exit(1);
             }
             
-            // --- NEW: Safely check for NULLs! ---
             int left_type = (ast->left != NULL) ? ast->left->data_type : 0;
             int right_type = (ast->value != NULL) ? ast->value->data_type : 0;
 
-            // --- NEW: Ensure ast->left is NOT NULL before checking its type ---
             if (ast->left != NULL && ast->left->type == AST_ACCESS && existing_type == 2 && (right_type == 1 || right_type == 5)) {
-                // It is a string index assignment! Let it pass!
             }
             else if (left_type != right_type) {
-                // Wait! For a standard assignment like `i = 0`, left_type will be 0. 
-                // We only want to throw an error if the types actually explicitly mismatch!
                 if (left_type != 0 && right_type != 0) {
                     printf("\n[Semantic Error]: Cannot assign mismatching type to '%s'.\n", ast->name);
                     exit(1);
@@ -461,10 +486,8 @@ AST_T* parser_parse_id(parser_T* parser)
             sym_count++;
         } 
         else if (assigned_type != 0) {
-            sym_names[sym_count] = ast->name;
-            sym_types[sym_count] = assigned_type;
-            sym_count++;
-            ast->data_type = assigned_type; 
+            printf("\n[Semantic Error] at line %d: Undeclared variable '%s'. You must specify a type (e.g., %s: int = ...).\n", current_line, ast->name, ast->name);
+            exit(1);
         }
     }
     return ast;
@@ -472,12 +495,19 @@ AST_T* parser_parse_id(parser_T* parser)
 
   if (parsed_data_type != 0) {
       AST_T* ast = init_ast(AST_ASSIGNMENT);
+      ast->line = current_line;
       ast->name = value;
       ast->data_type = parsed_data_type;
       
+      sym_names[sym_count] = ast->name;
+      sym_types[sym_count] = parsed_data_type;
+      sym_count++;
+      
       AST_T* default_val = init_ast(AST_INT);
+      default_val->line = current_line;
       default_val->int_value = 0;
       ast->value = default_val;
+      
       return ast;
   }
 
@@ -486,6 +516,8 @@ AST_T* parser_parse_id(parser_T* parser)
   }
 
   AST_T* ast = init_ast(AST_VARIABLE);
+  ast->line = current_line;
+
   ast->name = value;
 
   if (parser->token->type == TOKEN_LPAREN)
@@ -504,6 +536,7 @@ AST_T* parser_parse_block(parser_T* parser)
 {
   parser_eat(parser, TOKEN_LBRACE);
   AST_T* ast = init_ast(AST_COMPOUND);
+  ast->line = parser->token->line;
 
   while(parser->token->type != TOKEN_RBRACE)
   {
@@ -523,28 +556,24 @@ AST_T* parser_parse_list(parser_T* parser)
   parser_eat(parser, is_bracket ? TOKEN_LBRACKET : TOKEN_LPAREN);
 
   AST_T* ast = init_ast(AST_COMPOUND);
+  ast->line = parser->token->line;
 
   if (parser->token->type != TOKEN_RPAREN && parser->token->type != TOKEN_RBRACKET)
   {
-      list_push(ast->children, parser_parse_expr(parser));
+      if (parser->token->type == TOKEN_ID && strcmp(parser->token->value, "void") == 0) {
+          parser_eat(parser, TOKEN_ID);
+      } else {
+          list_push(ast->children, parser_parse_expr(parser));
 
-      while(parser->token->type == TOKEN_COMMA)
-      {
-        parser_eat(parser, TOKEN_COMMA);
-        list_push(ast->children, parser_parse_expr(parser));
+          while(parser->token->type == TOKEN_COMMA)
+          {
+            parser_eat(parser, TOKEN_COMMA);
+            list_push(ast->children, parser_parse_expr(parser));
+          }
       }
   }
 
   parser_eat(parser, is_bracket ? TOKEN_RBRACKET : TOKEN_RPAREN);
-
-  if (parser->token->type == TOKEN_COLON)
-  {
-    parser_eat(parser, TOKEN_COLON);
-    if (parser->token->type == TOKEN_ID) {
-        ast->data_type = typename_to_int(parser->token->value);
-        parser_eat(parser, TOKEN_ID);
-    }
-  }
 
   if (parser->token->type == TOKEN_ARROW_RIGHT)
   {
@@ -562,6 +591,7 @@ AST_T* parser_parse_int(parser_T* parser)
   parser_eat(parser, TOKEN_INT);
 
   AST_T* ast = init_ast(AST_INT);
+  ast->line = parser->token->line;
   ast->int_value = int_value;
 
   return ast;
@@ -578,6 +608,7 @@ AST_T* parser_parse_compound(parser_T* parser)
   }
 
   AST_T* compound = init_ast(AST_COMPOUND);
+  compound->line = parser->token->line;
 
   while(parser->token->type != TOKEN_EOF && parser->token->type != TOKEN_RBRACE)
   {
@@ -596,6 +627,7 @@ AST_T* parser_parse_compound(parser_T* parser)
 
 AST_T* parser_parse_for(parser_T* parser, list_T* list) { 
     AST_T* ast = init_ast(AST_FOR); 
+    ast->line = parser->token->line;    
     
     parser_eat(parser, TOKEN_FOR);
     parser_eat(parser, TOKEN_LPAREN);
@@ -626,6 +658,7 @@ AST_T* parser_parse_logical(parser_T* parser) {
         parser_eat(parser, op_token->type);
 
         AST_T* binop = init_ast(AST_BINOP);
+        binop->line = parser->token->line;
         binop->left = left;
         binop->op = op_token->value; 
         

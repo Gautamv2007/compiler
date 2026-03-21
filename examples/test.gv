@@ -1,7 +1,4 @@
 main = () -> {
-  msg:string = "Hello World";
-  for(i:int = 0;i<5;i+=1){
-    print(msg[i], "\n");
-  }
+  i = 10;
   return 0;
 }

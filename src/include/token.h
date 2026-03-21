@@ -51,6 +51,7 @@ typedef struct TOKEN_STRUCT
   } type;
 
   char* value;
+  int line;
 } token_T;
 
 token_T* init_token(char* value, int type);

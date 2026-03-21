@@ -39,6 +39,7 @@ typedef struct AST_STRUCT
   struct AST_STRUCT* right; //for Binary Ops (right side)
   struct AST_STRUCT* value; //for assignments/returns
   
+  int line; // For error reporting
   int int_value;
   int data_type;
   int int_value2; //for future use (e.g., array sizes, second operand in certain operations)

@@ -10,6 +10,7 @@ typedef struct LEXER_STRUCT
   size_t src_size;      // Length of source code
   char c;               // Current character being looked at
   unsigned int i;       // Current index in source
+  int line;            // Current line number (for error reporting)
 } lexer_T;
 
 lexer_T* init_lexer(char* src);

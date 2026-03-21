@@ -405,7 +405,7 @@ char* as_f_assignment(AST_T* ast, list_T* list)
 
     AST_T* func_body = as_val->value; 
 
-    // [ ... Return Validation logic stays exactly the same ... ]
+    // [ ... Return Validation logic ... ]
     if (func_body && func_body->children && func_body->children->size > 0) 
     {
         AST_T* last_stmt = (AST_T*) func_body->children->items[func_body->children->size - 1];
@@ -421,10 +421,11 @@ char* as_f_assignment(AST_T* ast, list_T* list)
         int has_return = is_return_stmt || is_return_call;
 
         if (!has_return) {
-            AST_T* first_arg = (as_val->children && as_val->children->size > 0) ? 
-                               (AST_T*)as_val->children->items[0] : NULL;
-
-            int is_void = (first_arg && first_arg->name && strcmp(first_arg->name, "void") == 0);
+            
+            // ---> NEW: Much cleaner void check using the parsed data_type! <---
+            // We mapped 'void' to data_type 4 in the parser.
+            // We also allow 0 (untyped) to act as void by default so older scripts don't break.
+            int is_void = (ast->data_type == 4 || ast->data_type == 0); 
 
             if (!is_void) {
                 printf("\n[Compiler Error]: Missing return value in function '%s'!\n", ast->name);
