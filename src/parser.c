@@ -285,6 +285,8 @@ int get_expression_type(AST_T* node) {
             return 1;
         case AST_STRING: 
             return 2;
+        case AST_ARRAY: 
+            return 3;
         case AST_CALL:
             if (strcmp(node->name, "to_int") == 0) return 1;
             if (strcmp(node->name, "input") == 0) return 2;

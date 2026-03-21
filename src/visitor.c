@@ -231,6 +231,8 @@ AST_T* visitor_visit_array(visitor_T* visitor, AST_T* node, list_T* list)
 {
     AST_T* arr_node = init_ast(AST_ARRAY);
     if (node->children) {
+        arr_node->children = init_list(sizeof(AST_T*));
+
         for (unsigned int i = 0; i < node->children->size; i++) {
             AST_T* child = (AST_T*) node->children->items[i];
             list_push(arr_node->children, visitor_visit(visitor, child, list));

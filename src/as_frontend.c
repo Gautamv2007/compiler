@@ -1162,9 +1162,9 @@ char* as_f_array(AST_T* ast, list_T* list) {
     char* s = calloc(1024, sizeof(char));
     
     sprintf(s, 
-        "movl heap_ptr, %%eax\n"        // Get the current free memory address
-        "movl %%eax, %%edi\n"           // Save a copy of it in %edi
-        "addl $%d, heap_ptr\n",         // Bump the heap pointer forward for the NEXT array!
+        "movl heap_ptr, %%eax\n"        
+        "movl %%eax, %%edi\n"           
+        "addl $%d, heap_ptr\n",         
         array_size
     );
 
@@ -1174,9 +1174,11 @@ char* as_f_array(AST_T* ast, list_T* list) {
         
         char* store_s = calloc(strlen(child_s) + 128, sizeof(char));
         sprintf(store_s, 
-            "%s"                        // Evaluate item (puts result in %eax)
-            "movl %%eax, %d(%%edi)\n",  // MAGIC: Store %eax into the Array Memory at the correct offset!
-            child_s, i * 4              // Offset is 0, 4, 8, 12, etc.
+            "pushl %%edi\n"             
+            "%s"                        
+            "popl %%edi\n"              
+            "movl %%eax, %d(%%edi)\n",  
+            child_s, i * 4              
         );
         
         s = realloc(s, strlen(s) + strlen(store_s) + 1);
@@ -1184,7 +1186,11 @@ char* as_f_array(AST_T* ast, list_T* list) {
         free(child_s); free(store_s);
     }
     
-    strcat(s, "movl %edi, %eax\n");
+    // ---> THE FIX: Safely expand memory before the final string concatenation! <---
+    const char* epilogue = "movl %edi, %eax\n";
+    s = realloc(s, strlen(s) + strlen(epilogue) + 1);
+    strcat(s, epilogue);
+    
     return s;
 }
 
