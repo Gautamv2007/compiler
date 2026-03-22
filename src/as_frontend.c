@@ -119,23 +119,28 @@ char* as_f_binop(AST_T* ast, list_T* list) {
         strcat(s, "imull %ebx, %eax\n");
     }
     else if (strcmp(ast->op, "/") == 0) {
-      if (ast->right->type == AST_INT && ast->right->int_value == 0) 
-      {
-          printf("\n[Math Error]: Division by literal zero detected!\n");
-          exit(1);
-      }
-      if (ast->right->type == AST_VARIABLE && ast->right->name != NULL) 
-      {
-          for (int i = 0; i < tracked_count; i++) {
-              if (strcmp(tracked_vars[i], ast->right->name) == 0) {
-                  if (tracked_vals[i] == 0) {
-                      printf("\n[Math Error]: Division by zero detected via variable '%s'!\n", ast->right->name);
-                      exit(1);
-                  }
-                  break;
-              }
-          }
-      }
+        if (ast->right->type == AST_INT && ast->right->int_value == 0) 
+        {
+            printf("\n[Math Error] Line %d: Division by literal zero detected!\n", ast->line);
+            exit(1);
+        }
+
+        if (ast->right->type == AST_VARIABLE && ast->right->name != NULL) 
+        {
+            for (int i = 0; i < tracked_count; i++) 
+            {
+                if (strcmp(tracked_vars[i], ast->right->name) == 0) 
+                {
+                    if (tracked_vals[i] == 0) 
+                    {
+                        printf("\n[Math Error] Line %d: Division by zero detected via variable '%s'!\n", 
+                                ast->line, ast->right->name);
+                        exit(1);
+                    }
+                    break;
+                }
+            }
+        }
       char* left_val = as_f(ast->left, list);
       char* right_val = as_f(ast->right, list);
 
