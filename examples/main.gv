@@ -1,5 +1,0 @@
-main = () -> {
-  x:int = 10/0;
-  print(x, "\n");
-  return 0;
-}
