@@ -23,7 +23,7 @@ token_T* parser_eat(parser_T* parser, int type)
 {
   if (parser->token->type != type)
   {
-    printf("[Parser]: Unexpected token: `%s`, was expecting: `%s`\n", token_to_str(parser->token), token_type_to_str(type));
+    printf("[Parser Error] Line %d: Unexpected token: `%s`, was expecting: `%s`\n", parser->token->line-1, token_to_str(parser->token), token_type_to_str(type));
     exit(1);
   }
   parser->token = lexer_next_token(parser->lexer);
@@ -141,7 +141,7 @@ AST_T* parser_parse_factor(parser_T* parser) {
         }
 
         default: 
-            printf("[Parser]: Unexpected token in factor `%s`\n", token_to_str(parser->token)); 
+            printf("[Parser Error] Line %d: Unexpected token in factor `%s`\n", parser->token->line-1, token_to_str(parser->token)); 
             exit(1);
     }
 }
@@ -407,7 +407,7 @@ AST_T* parser_parse_id(parser_T* parser)
           parser_eat(parser, parser->token->type);
       }
       else {
-          printf("[Parser Error]: Expected a valid data type like 'int', 'string', or 'void' after ':', but got '%s'\n", parser->token->value);
+          printf("[Parser Error] Line %d: Expected a valid data type like 'int', 'string', or 'void' after ':', but got '%s'\n",parser->token->line-1, parser->token->value);
           exit(1);
       }
   }
